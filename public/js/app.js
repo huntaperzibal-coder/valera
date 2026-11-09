@@ -34,3 +34,26 @@ textForm.addEventListener("submit",e=>{e.preventDefault();const value=textInput.
 document.getElementById("demo").addEventListener("click",()=>{state("thinking","Фокси придумывает");setTimeout(()=>speak(replies[turn++%replies.length]),650)});
 listen.addEventListener("click",()=>{if(busy||sending)return;if(!Recognition){state("idle","Браузер не поддерживает распознавание речи");return}if(synth)synth.cancel();const rec=new Recognition();rec.lang="ru-RU";rec.interimResults=false;rec.onstart=()=>{busy=true;state("listening","Я тебя слушаю");bubble.textContent="Я слушаю!"};rec.onresult=e=>respond(e.results[0][0].transcript);rec.onerror=e=>{state("idle",e.error==="not-allowed"?"Разреши микрофон в браузере":"Не расслышал, повтори");bubble.textContent="Попробуем ещё?"};rec.onend=()=>{busy=false;if(fox.dataset.state==="listening")state("idle","Попробуй ещё раз")};try{rec.start()}catch(e){state("idle","Не получилось включить микрофон")}});
 document.getElementById("adult").addEventListener("click",()=>document.getElementById("info").showModal());
+
+const usageButton=document.getElementById("usage-refresh");
+const formatRub=value=>typeof value==="number" ? value.toLocaleString("ru-RU",{minimumFractionDigits:3,maximumFractionDigits:4})+" ₽" : "—";
+usageButton.addEventListener("click",async()=>{
+  const el=document.getElementById("usage-status");
+  el.textContent="Загружаем статистику…";
+  usageButton.disabled=true;
+  try{
+    if(!(await parentLogin())){el.textContent="Для просмотра нужен родительский пароль";return}
+    const data=await request({action:"usage"});
+    const p=data.periods;
+    const describe=entry=>formatRub(entry.rub)+" · "+entry.requests+" запр.";
+    document.getElementById("usage-today").textContent=describe(p.today);
+    document.getElementById("usage-month").textContent=describe(p.month);
+    document.getElementById("usage-all").textContent=describe(p.all);
+    const last=data.last;
+    document.getElementById("usage-last").textContent=last ? formatRub(last.rub)+" · "+last.input+" + "+last.output+" ток." : "Пока нет данных";
+    document.getElementById("usage-tokens").textContent="За месяц: входящих "+p.month.input+", исходящих "+p.month.output+", кешированных "+p.month.cached+", рассуждений "+p.month.reasoning+" токенов.";
+    document.getElementById("usage-display").hidden=false;
+    el.textContent="Обновлено";
+  }catch(e){el.textContent=e.message}
+  finally{usageButton.disabled=false}
+});
