@@ -2,7 +2,7 @@
 const fox=document.getElementById("fox"),bubble=document.getElementById("bubble"),status=document.getElementById("status"),listen=document.getElementById("listen"),textForm=document.getElementById("text-form"),textInput=document.getElementById("message-input"),sendText=document.getElementById("send-text");
 const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
 const synth=window.speechSynthesis;
-let busy=false,turn=0,csrf="",history=[],sending=false;
+let busy=false,turn=0,csrf="",history=[],sending=false,learning=false,turnsSinceLearn=0;
 
 function timeContext(){
   const d=new Date(),h=d.getHours(),m=d.getMonth(),w=d.getDay();
@@ -76,7 +76,15 @@ async function respond(heard){
     const r=await request({action:"chat",csrf,message:heard,history,context:timeContext()});
     history.push({role:"user",content:heard},{role:"assistant",content:r.reply});
     history=history.slice(-8);
+    turnsSinceLearn++;
     speak(r.reply);
+    if(turnsSinceLearn>=4 && history.length>=6 && !learning){
+      turnsSinceLearn=0;
+      learning=true;
+      const turns=history.slice();
+      // Nonblocking: never delay a spoken response to write optional memories.
+      request({action:"memory_learn",csrf,turns}).catch(()=>{}).finally(()=>{learning=false});
+    }
   }catch(e){state("idle",e.message);bubble.textContent="Кажется, связь пропала. Давай попробуем позже."}
   finally{sending=false;sendText.disabled=false;listen.disabled=false}
 }
@@ -114,3 +122,31 @@ document.getElementById("memory-save").addEventListener("click",async()=>{try{if
 document.getElementById("memory-clear").addEventListener("click",async()=>{if(!confirm("Удалить все воспоминания Фокси?"))return;try{if(!(await parentLogin()))return;await request({action:"memory_save",csrf,notes:""});memoryNotes.value="";memoryStatus.textContent="Память очищена"}catch(e){memoryStatus.textContent=e.message}});
 document.getElementById("voice-choice").addEventListener("change",e=>localStorage.setItem("foxy_voice",e.target.value));
 document.getElementById("voice-test").addEventListener("click",()=>speak("Привет! Я Фокси. Как тебе мой голос?"));
+
+const autoList=document.getElementById("auto-memory-list");
+const autoStatus=document.getElementById("auto-memory-status");
+async function loadAutoMemories(){
+  try{
+    if(!(await parentLogin()))return;
+    const data=await request({action:"memory_list"});
+    autoList.replaceChildren();
+    if(!data.available){autoStatus.textContent="SQLite на сервере недоступен. Проверь расширение pdo_sqlite.";return}
+    if(!data.memories.length){autoStatus.textContent="Пока нет автоматических воспоминаний. Они появятся после нескольких разговоров.";return}
+    autoStatus.textContent="Сохранено: "+data.memories.length;
+    for(const entry of data.memories){
+      const li=document.createElement("li");
+      const span=document.createElement("span");span.textContent=entry.content;
+      const button=document.createElement("button");button.type="button";button.textContent="Удалить";
+      button.addEventListener("click",async()=>{
+        if(!confirm("Удалить это воспоминание?"))return;
+        try{await request({action:"memory_delete",csrf,id:entry.id});await loadAutoMemories()}catch(e){autoStatus.textContent=e.message}
+      });
+      li.append(span,button);autoList.appendChild(li);
+    }
+  }catch(e){autoStatus.textContent=e.message}
+}
+document.getElementById("auto-memory-refresh").addEventListener("click",loadAutoMemories);
+document.getElementById("auto-memory-clear").addEventListener("click",async()=>{
+  if(!confirm("Удалить все автоматические воспоминания Фокси?"))return;
+  try{if(!(await parentLogin()))return;await request({action:"memory_clear_auto",csrf});await loadAutoMemories()}catch(e){autoStatus.textContent=e.message}
+});
