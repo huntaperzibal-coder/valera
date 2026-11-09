@@ -4,7 +4,7 @@ const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
 const synth=window.speechSynthesis;
 let busy=false,turn=0,csrf="",history=[],sending=false;
 const replies=["Привет! Я Фокси! Хочешь загадку про лес?","Слушай загадку: зимой и летом одним цветом. Что это?","Давай придумаем вместе сказку про волшебного дракончика!"];
-function state(s,t){fox.dataset.state=s;status.textContent=t}
+function state(s,t){fox.dataset.state=s;document.getElementById("voice-indicator").dataset.state=s;status.textContent=t}
 function speak(text){bubble.textContent=text;if(!synth||!window.SpeechSynthesisUtterance){state("idle","Ответ показан на экране");return} synth.cancel();const u=new SpeechSynthesisUtterance(text);u.lang="ru-RU";u.rate=.88;u.onstart=()=>state("speaking","Фокси говорит");u.onend=()=>state("idle","Можно поговорить ещё");u.onerror=()=>state("idle","Ответ на экране, но озвучка недоступна");synth.speak(u)}
 async function request(data){const r=await fetch("/api/chat.php",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});const j=await r.json();if(!r.ok)throw new Error((j.error||"Не удалось получить ответ")+(j.finish_reason?" (причина: "+j.finish_reason+")":""));return j}
 async function parentLogin(){
