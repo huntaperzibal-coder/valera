@@ -1,0 +1,7 @@
+.env
+.env.*
+!.env.example
+storage/
+*.sqlite
+*.db
+config/local.php
