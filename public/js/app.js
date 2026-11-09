@@ -2,11 +2,30 @@
 const fox=document.getElementById("fox"),bubble=document.getElementById("bubble"),status=document.getElementById("status"),listen=document.getElementById("listen");
 const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
 const synth=window.speechSynthesis;
-let busy=false,turn=0;
+let busy=false,turn=0,csrf="",history=[];
 const replies=["Привет! Я Фокси! Хочешь загадку про лес?","Слушай загадку: зимой и летом одним цветом. Что это?","Давай придумаем вместе сказку про волшебного дракончика!"];
 function state(s,t){fox.dataset.state=s;status.textContent=t}
 function speak(text){bubble.textContent=text;if(!synth||!window.SpeechSynthesisUtterance){state("idle","Озвучка в браузере недоступна");return} synth.cancel();const u=new SpeechSynthesisUtterance(text);u.lang="ru-RU";u.rate=.88;u.onstart=()=>state("speaking","Фокси говорит");u.onend=()=>state("idle","Можно поговорить ещё");u.onerror=()=>state("idle","Не удалось воспроизвести речь");synth.speak(u)}
-function respond(heard){state("thinking","Фокси думает");if(heard)bubble.textContent="Я услышал: «"+heard.slice(0,90)+"»";setTimeout(()=>speak(replies[turn++%replies.length]),700)}
+async function request(data){const r=await fetch("/api/chat.php",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});const j=await r.json();if(!r.ok)throw new Error(j.error||"Не удалось получить ответ");return j}
+async function parentLogin(){
+  if(csrf)return true;
+  try{const s=await request({action:"status"});csrf=s.csrf;return true}catch(e){}
+  const password=window.prompt("Для включения ИИ взрослый должен ввести пароль доступа:");
+  if(password===null)return false;
+  try{const s=await request({action:"login",password});csrf=s.csrf;state("idle","ИИ подключён, можно поговорить");return true}
+  catch(e){state("idle",e.message);return false}
+}
+async function respond(heard){
+  if(!heard){state("thinking","Фокси придумывает");window.setTimeout(()=>speak(replies[turn++%replies.length]),650);return}
+  if(!(await parentLogin())){state("idle","Сначала нужен взрослый");return}
+  state("thinking","Фокси думает");bubble.textContent="Сейчас подумаю…";
+  try{
+    const r=await request({action:"chat",csrf,message:heard,history});
+    history.push({role:"user",content:heard},{role:"assistant",content:r.reply});
+    history=history.slice(-8);
+    speak(r.reply);
+  }catch(e){state("idle",e.message);bubble.textContent="Кажется, связь пропала. Давай попробуем позже."}
+}
 document.getElementById("demo").addEventListener("click",()=>respond(""));
-listen.addEventListener("click",()=>{if(busy)return;if(!Recognition){state("idle","Браузер не поддерживает распознавание");respond("");return} if(synth)synth.cancel();const rec=new Recognition();rec.lang="ru-RU";rec.interimResults=false;rec.onstart=()=>{busy=true;state("listening","Я тебя слушаю");bubble.textContent="Я слушаю!"};rec.onresult=e=>respond(e.results[0][0].transcript);rec.onerror=e=>{state("idle",e.error==="not-allowed"?"Разреши микрофон в браузере":"Не расслышал, повтори");bubble.textContent="Попробуем ещё?"};rec.onend=()=>{busy=false;if(fox.dataset.state==="listening")state("idle","Попробуй ещё раз")};try{rec.start()}catch(e){state("idle","Не получилось включить микрофон")}});
+listen.addEventListener("click",()=>{if(busy)return;if(!Recognition){state("idle","Браузер не поддерживает распознавание речи");return}if(synth)synth.cancel();const rec=new Recognition();rec.lang="ru-RU";rec.interimResults=false;rec.onstart=()=>{busy=true;state("listening","Я тебя слушаю");bubble.textContent="Я слушаю!"};rec.onresult=e=>respond(e.results[0][0].transcript);rec.onerror=e=>{state("idle",e.error==="not-allowed"?"Разреши микрофон в браузере":"Не расслышал, повтори");bubble.textContent="Попробуем ещё?"};rec.onend=()=>{busy=false;if(fox.dataset.state==="listening")state("idle","Попробуй ещё раз")};try{rec.start()}catch(e){state("idle","Не получилось включить микрофон")}});
 document.getElementById("adult").addEventListener("click",()=>document.getElementById("info").showModal());
