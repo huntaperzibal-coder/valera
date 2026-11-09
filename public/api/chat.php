@@ -199,7 +199,7 @@ $dayPart = $parts[$context['dayPart'] ?? ''] ?? null;
 $season = $seasons[$context['season'] ?? ''] ?? null;
 $dayType = $days[$context['dayType'] ?? ''] ?? null;
 if ($dayPart && $season && $dayType) {
-    $prompt .= "\\nМестное время устройства по сообщению клиента: " . $dayPart . ", " . $season . ", " . $dayType . ". Это подсказка, а не установленный факт; не утверждай, какая сейчас погода. Используй контекст только если уместно для беседы.";
+    $prompt .= "\nМестное время устройства по сообщению клиента: " . $dayPart . ", " . $season . ", " . $dayType . ". Это подсказка, а не установленный факт; не утверждай, какая сейчас погода. Используй контекст только если уместно для беседы.";
 }
 $messages = array_merge([['role'=>'system','content'=>$prompt]], $history, [['role'=>'user','content'=>$input]]);
 $payload = json_encode([
