@@ -94,7 +94,9 @@ $messages = array_merge([['role'=>'system','content'=>$prompt]], $history, [['ro
 $payload = json_encode([
     'model'=>'gpt://' . $config['folder_id'] . '/' . ($config['model'] ?? 'qwen3.6-35b-a3b'),
     'messages'=>$messages,
-    'max_tokens'=>1100,
+    'max_completion_tokens'=>350,
+    'reasoning_effort'=>'none',
+    'store'=>false,
     'stream'=>false
 ], JSON_UNESCAPED_UNICODE);
 if ($payload === false || !function_exists('curl_init')) {
@@ -118,11 +120,11 @@ $response = curl_exec($curl);
 $http = (int)curl_getinfo($curl, CURLINFO_HTTP_CODE);
 curl_close($curl);
 if ($response === false || $http < 200 || $http >= 300) {
-    http_response_code(502); echo json_encode(['error'=>'Фокси пока не может связаться с ИИ','provider_status'=>$http], JSON_UNESCAPED_UNICODE); exit;
+    http_response_code(502); echo json_encode(['error'=>'Ошибка обращения к модели','provider_status'=>$http], JSON_UNESCAPED_UNICODE); exit;
 }
 $data=json_decode($response,true);
 $answer=trim((string)($data['choices'][0]['message']['content'] ?? ''));
 if ($answer==='') {
-    http_response_code(502); echo json_encode(['error'=>'ИИ не прислал текст ответа','finish_reason'=>substr((string)($data['choices'][0]['finish_reason'] ?? 'unknown'),0,40)], JSON_UNESCAPED_UNICODE); exit;
+    http_response_code(502); echo json_encode(['error'=>'ИИ не прислал текст ответа','finish_reason'=>substr((string)($data['choices'][0]['finish_reason'] ?? 'unknown'),0,40), 'reasoning_tokens'=>(int)($data['usage']['completion_tokens_details']['reasoning_tokens'] ?? 0)], JSON_UNESCAPED_UNICODE); exit;
 }
 echo json_encode(['reply'=>mb_substr($answer,0,900,'UTF-8')], JSON_UNESCAPED_UNICODE);
