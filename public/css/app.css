@@ -37,3 +37,9 @@
 .memory-actions button,.voice-settings button{font-size:13px;padding:10px 12px}
 .voice-settings select{width:100%;padding:10px;border:1px solid #dcb98f;border-radius:10px;background:white}
 .voice-settings input{width:100%}
+
+.auto-memory-panel{margin:20px 0;padding:16px;border-radius:16px;background:#fff8e9}
+.auto-memory-panel h3{margin:0 0 6px}.auto-memory-panel p{font-size:13px;line-height:1.45}
+.auto-memory-panel li{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid #e9ddc9;font-size:14px}
+.auto-memory-panel li button{flex-shrink:0;padding:7px 11px;font-size:12px}
+.auto-memory-panel ul{list-style:none;margin:0;padding:0}
