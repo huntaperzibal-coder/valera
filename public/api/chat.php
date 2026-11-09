@@ -73,7 +73,7 @@ function foxyUsageSummary(): array {
     $now = time();
     $day = gmdate('Y-m-d', $now);
     $month = gmdate('Y-m', $now);
-    $empty = fn() => ['requests'=>0,'input'=>0,'output'=>0,'cached'=>0,'reasoning'=>0,'rub'=>0.0];
+    $empty = function () { return ['requests'=>0,'input'=>0,'output'=>0,'cached'=>0,'reasoning'=>0,'rub'=>0.0]; };
     $totals = ['today'=>$empty(), 'month'=>$empty(), 'all'=>$empty()];
     $last = null;
     $file = foxyLedgerPath();
