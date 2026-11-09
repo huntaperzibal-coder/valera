@@ -94,7 +94,7 @@ $messages = array_merge([['role'=>'system','content'=>$prompt]], $history, [['ro
 $payload = json_encode([
     'model'=>'gpt://' . $config['folder_id'] . '/' . ($config['model'] ?? 'qwen3.6-35b-a3b'),
     'messages'=>$messages,
-    'max_tokens'=>220,
+    'max_tokens'=>1100,
     'stream'=>false
 ], JSON_UNESCAPED_UNICODE);
 if ($payload === false || !function_exists('curl_init')) {
@@ -123,6 +123,6 @@ if ($response === false || $http < 200 || $http >= 300) {
 $data=json_decode($response,true);
 $answer=trim((string)($data['choices'][0]['message']['content'] ?? ''));
 if ($answer==='') {
-    http_response_code(502); echo json_encode(['error'=>'ИИ не прислал текст ответа'], JSON_UNESCAPED_UNICODE); exit;
+    http_response_code(502); echo json_encode(['error'=>'ИИ не прислал текст ответа','finish_reason'=>substr((string)($data['choices'][0]['finish_reason'] ?? 'unknown'),0,40)], JSON_UNESCAPED_UNICODE); exit;
 }
 echo json_encode(['reply'=>mb_substr($answer,0,900,'UTF-8')], JSON_UNESCAPED_UNICODE);
