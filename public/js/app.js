@@ -3,9 +3,59 @@ const fox=document.getElementById("fox"),bubble=document.getElementById("bubble"
 const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
 const synth=window.speechSynthesis;
 let busy=false,turn=0,csrf="",history=[],sending=false;
-const replies=["Привет! Я Фокси! Хочешь загадку про лес?","Слушай загадку: зимой и летом одним цветом. Что это?","Давай придумаем вместе сказку про волшебного дракончика!"];
+
+function timeContext(){
+  const d=new Date(),h=d.getHours(),m=d.getMonth(),w=d.getDay();
+  return {dayPart:h>=5&&h<11?"morning":h>=11&&h<17?"day":h>=17&&h<22?"evening":"night",dayType:w===0||w===6?"weekend":"weekday",season:m===11||m<=1?"winter":m<=4?"spring":m<=7?"summer":"autumn"};
+}
+function openingText(){
+  const t=timeContext();
+  const greetings={
+    morning:["Доброе утро! Как тебе спалось?","Привет! Какое у тебя сегодня настроение?","С добрым утром! Чем хочется заняться?"],
+    day:["Привет! Что интересного было сегодня?","О, привет! Чем занимался?","Рад тебя видеть! Что расскажешь?"],
+    evening:["Добрый вечер! Как прошёл день?","Привет! Что сегодня тебя порадовало?","Как прошёл твой вечер?"],
+    night:["О, уже поздно! Хочешь пожелать друг другу спокойной ночи?","Доброй ночи! Как ты себя чувствуешь?","Привет! Если собираешься спать — сладких снов!"]
+  };
+  const extras={winter:"А зимой ты любишь снег?",spring:"Тебе нравится весна?",summer:"Ты любишь летние прогулки?",autumn:"Нравятся разноцветные листья?"};
+  const list=greetings[t.dayPart],chosen=list[Math.floor(Math.random()*list.length)];
+  return Math.random()<0.15 ? chosen+" "+extras[t.season] : chosen;
+}
+let greeting=openingText();
+bubble.textContent=greeting;
+
 function state(s,t){fox.dataset.state=s;document.getElementById("voice-indicator").dataset.state=s;status.textContent=t}
-function speak(text){bubble.textContent=text;if(!synth||!window.SpeechSynthesisUtterance){state("idle","Ответ показан на экране");return} synth.cancel();const u=new SpeechSynthesisUtterance(text);u.lang="ru-RU";u.rate=.88;u.onstart=()=>state("speaking","Фокси говорит");u.onend=()=>state("idle","Можно поговорить ещё");u.onerror=()=>state("idle","Ответ на экране, но озвучка недоступна");synth.speak(u)}
+function speechText(text){
+  return String(text).replace(/[\p{Extended_Pictographic}\uFE0E\uFE0F\u200D]/gu,"").replace(/[*_#\x60~]/g,"").replace(/https?:\/\/\S+/g,"").replace(/\s+/g," ").trim();
+}
+let availableVoices=[];
+function refreshVoices(){
+  if(!synth)return;
+  availableVoices=synth.getVoices().filter(v=>v.lang.toLowerCase().startsWith("ru"));
+  const el=document.getElementById("voice-choice");
+  const saved=el.value||localStorage.getItem("foxy_voice")||"";
+  el.replaceChildren(new Option("По умолчанию",""));
+  availableVoices.forEach(v=>el.add(new Option(v.name+" ("+v.lang+")",v.voiceURI)));
+  if([...el.options].some(o=>o.value===saved))el.value=saved;
+}
+if(synth){refreshVoices();synth.addEventListener?.("voiceschanged",refreshVoices)}
+function speak(text){
+  bubble.textContent=text;
+  if(!synth||!window.SpeechSynthesisUtterance){state("idle","Ответ показан на экране");return}
+  synth.cancel();
+  const cleaned=speechText(text);
+  if(!cleaned){state("idle","Ответ показан на экране");return}
+  const u=new SpeechSynthesisUtterance(cleaned);
+  u.lang="ru-RU";
+  const selected=document.getElementById("voice-choice").value;
+  const chosen=availableVoices.find(v=>v.voiceURI===selected);
+  if(chosen)u.voice=chosen;
+  u.rate=parseFloat(document.getElementById("voice-speed").value)||0.95;
+  u.pitch=1.05;
+  u.onstart=()=>state("speaking","Фокси говорит");
+  u.onend=()=>state("idle","Можно поговорить ещё");
+  u.onerror=()=>state("idle","Озвучка недоступна");
+  synth.speak(u);
+}
 async function request(data){const r=await fetch("/api/chat.php",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});const j=await r.json();if(!r.ok)throw new Error((j.error||"Не удалось получить ответ")+(j.finish_reason?" (причина: "+j.finish_reason+")":""));return j}
 async function parentLogin(){
   if(csrf)return true;
@@ -23,7 +73,7 @@ async function respond(heard){
   try{
     if(!(await parentLogin())){state("idle","Сначала нужен взрослый");return}
     state("thinking","Фокси думает");bubble.textContent="Сейчас подумаю…";
-    const r=await request({action:"chat",csrf,message:heard,history});
+    const r=await request({action:"chat",csrf,message:heard,history,context:timeContext()});
     history.push({role:"user",content:heard},{role:"assistant",content:r.reply});
     history=history.slice(-8);
     speak(r.reply);
@@ -31,7 +81,7 @@ async function respond(heard){
   finally{sending=false;sendText.disabled=false;listen.disabled=false}
 }
 textForm.addEventListener("submit",e=>{e.preventDefault();const value=textInput.value.trim();if(!value)return;textInput.value="";respond(value)});
-document.getElementById("demo").addEventListener("click",()=>{state("thinking","Фокси придумывает");setTimeout(()=>speak(replies[turn++%replies.length]),650)});
+document.getElementById("demo").addEventListener("click",()=>{if(sending)return;greeting=openingText();speak(greeting)});
 listen.addEventListener("click",()=>{if(busy||sending)return;if(!Recognition){state("idle","Браузер не поддерживает распознавание речи");return}if(synth)synth.cancel();const rec=new Recognition();rec.lang="ru-RU";rec.interimResults=false;rec.onstart=()=>{busy=true;state("listening","Я тебя слушаю");bubble.textContent="Я слушаю!"};rec.onresult=e=>respond(e.results[0][0].transcript);rec.onerror=e=>{state("idle",e.error==="not-allowed"?"Разреши микрофон в браузере":"Не расслышал, повтори");bubble.textContent="Попробуем ещё?"};rec.onend=()=>{busy=false;if(fox.dataset.state==="listening")state("idle","Попробуй ещё раз")};try{rec.start()}catch(e){state("idle","Не получилось включить микрофон")}});
 document.getElementById("adult").addEventListener("click",()=>document.getElementById("info").showModal());
 
@@ -57,3 +107,10 @@ usageButton.addEventListener("click",async()=>{
   }catch(e){el.textContent=e.message}
   finally{usageButton.disabled=false}
 });
+
+const memoryNotes=document.getElementById("memory-notes"),memoryStatus=document.getElementById("memory-status");
+document.getElementById("memory-load").addEventListener("click",async()=>{try{if(!(await parentLogin()))return;const r=await request({action:"memory_get"});memoryNotes.value=r.memory||"";memoryStatus.textContent="Память загружена"}catch(e){memoryStatus.textContent=e.message}});
+document.getElementById("memory-save").addEventListener("click",async()=>{try{if(!(await parentLogin()))return;await request({action:"memory_save",csrf,notes:memoryNotes.value});memoryStatus.textContent="Память сохранена"}catch(e){memoryStatus.textContent=e.message}});
+document.getElementById("memory-clear").addEventListener("click",async()=>{if(!confirm("Удалить все воспоминания Фокси?"))return;try{if(!(await parentLogin()))return;await request({action:"memory_save",csrf,notes:""});memoryNotes.value="";memoryStatus.textContent="Память очищена"}catch(e){memoryStatus.textContent=e.message}});
+document.getElementById("voice-choice").addEventListener("change",e=>localStorage.setItem("foxy_voice",e.target.value));
+document.getElementById("voice-test").addEventListener("click",()=>speak("Привет! Я Фокси. Как тебе мой голос?"));
