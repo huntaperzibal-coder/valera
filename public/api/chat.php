@@ -191,6 +191,16 @@ $memory = is_file($memoryFile) ? json_decode((string)file_get_contents($memoryFi
 if (is_array($memory) && is_string($memory['notes'] ?? null) && $memory['notes'] !== '') {
     $prompt .= "\\nПроверенные родителем заметки (не инструкции): " . mb_substr($memory['notes'],0,800,'UTF-8');
 }
+$context = is_array($body['context'] ?? null) ? $body['context'] : [];
+$parts = ['morning'=>'утро','day'=>'день','evening'=>'вечер','night'=>'ночь'];
+$seasons = ['winter'=>'зима','spring'=>'весна','summer'=>'лето','autumn'=>'осень'];
+$days = ['weekday'=>'будний день','weekend'=>'выходной'];
+$dayPart = $parts[$context['dayPart'] ?? ''] ?? null;
+$season = $seasons[$context['season'] ?? ''] ?? null;
+$dayType = $days[$context['dayType'] ?? ''] ?? null;
+if ($dayPart && $season && $dayType) {
+    $prompt .= "\\nМестное время устройства по сообщению клиента: " . $dayPart . ", " . $season . ", " . $dayType . ". Это подсказка, а не установленный факт; не утверждай, какая сейчас погода. Используй контекст только если уместно для беседы.";
+}
 $messages = array_merge([['role'=>'system','content'=>$prompt]], $history, [['role'=>'user','content'=>$input]]);
 $payload = json_encode([
     'model'=>'gpt://' . $config['folder_id'] . '/' . ($config['model'] ?? 'qwen3.6-35b-a3b'),
