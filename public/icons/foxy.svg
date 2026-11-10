@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="33 11 224 224"><rect x="-100" y="-100" width="500" height="500" fill="#f5e9d5"/><g class="foxy-head">
+    <path class="foxy-ear" d="M70 125Q42 77 58 26Q91 37 115 82Z" fill="#a8412e" stroke="#683626" stroke-width="4"/>
+    <path d="M73 103Q57 65 64 43Q87 55 98 81Z" fill="#f3ad93"/>
+    <path d="M166 78Q192 37 228 34Q239 76 209 126Z" fill="#b84e30" stroke="#683626" stroke-width="4"/>
+    <path d="M183 81Q204 54 222 50Q223 78 210 102Z" fill="#f3ad93"/>
+    <path d="M62 151Q59 90 119 76Q166 63 202 94Q227 114 220 156L240 174Q215 211 151 220Q86 214 49 174Z" fill="#e27d42" stroke="#783923" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M53 174Q79 140 110 154Q137 164 149 183Q173 151 192 151Q216 152 236 175Q207 210 151 216Q95 210 53 174Z" fill="#fff0d0"/>
+    <path d="M98 124Q111 113 125 121M172 120Q186 112 199 124" fill="none" stroke="#773821" stroke-width="5" stroke-linecap="round"/>
+    <g class="foxy-eyes" fill="#38282a">
+      <ellipse cx="113" cy="142" rx="9" ry="12"/><ellipse cx="185" cy="140" rx="9" ry="12"/>
+      <circle cx="116" cy="138" r="3" fill="#fff"/><circle cx="188" cy="136" r="3" fill="#fff"/>
+    </g>
+    <path d="M135 174Q150 168 162 174Q161 185 149 187Q138 183 135 174Z" fill="#492a29"/>
+    <path d="M137 191Q151 203 167 190" fill="none" stroke="#673729" stroke-width="3" stroke-linecap="round"/>
+
+  </g></svg>
