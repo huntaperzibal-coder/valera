@@ -370,4 +370,7 @@ $answer=trim((string)($data['choices'][0]['message']['content'] ?? ''));
 if ($answer==='') {
     http_response_code(502); echo json_encode(['error'=>'ИИ не прислал текст ответа','finish_reason'=>substr((string)($data['choices'][0]['finish_reason'] ?? 'unknown'),0,40), 'reasoning_tokens'=>(int)($data['usage']['completion_tokens_details']['reasoning_tokens'] ?? 0)], JSON_UNESCAPED_UNICODE); exit;
 }
-echo json_encode(['reply'=>mb_substr($answer,0,900,'UTF-8'), 'web'=> $webResult === null ? ['attempted'=>false] : ['attempted'=>true,'ok'=>!empty($webResult['ok']),'searched'=>!empty($webResult['searched']),'sources'=>$webResult['sources'] ?? [],'status'=> $webResult['status'] ?? null], 'usage'=>$usage === null ? null : ['input'=>(int)($usage['prompt_tokens'] ?? 0),'output'=>(int)($usage['completion_tokens'] ?? 0),'cached'=>(int)($usage['prompt_tokens_details']['cached_tokens'] ?? 0),'rub'=>foxyCost($usage,$modelName)]], JSON_UNESCAPED_UNICODE);
+require_once __DIR__ . '/_speech.php';
+$reply = mb_substr($answer,0,900,'UTF-8');
+$audio = foxySynthesize($reply, $config);
+echo json_encode(['reply'=>$reply, 'audio_mp3'=>$audio, 'web'=> $webResult === null ? ['attempted'=>false] : ['attempted'=>true,'ok'=>!empty($webResult['ok']),'searched'=>!empty($webResult['searched']),'sources'=>$webResult['sources'] ?? [],'status'=> $webResult['status'] ?? null], 'usage'=>$usage === null ? null : ['input'=>(int)($usage['prompt_tokens'] ?? 0),'output'=>(int)($usage['completion_tokens'] ?? 0),'cached'=>(int)($usage['prompt_tokens_details']['cached_tokens'] ?? 0),'rub'=>foxyCost($usage,$modelName)]], JSON_UNESCAPED_UNICODE);

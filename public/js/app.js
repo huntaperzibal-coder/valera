@@ -38,7 +38,30 @@ function refreshVoices(){
   if([...el.options].some(o=>o.value===saved))el.value=saved;
 }
 if(synth){refreshVoices();synth.addEventListener?.("voiceschanged",refreshVoices)}
-function speak(text){
+let replyAudio = null;
+function stopReplyAudio(){
+  if (!replyAudio) return;
+  replyAudio.pause();
+  replyAudio = null;
+}
+function speak(text, mp3){
+  stopReplyAudio();
+  if (mp3) {
+    synth?.cancel();
+    bubble.textContent = text;
+    const audio = new Audio("data:audio/mpeg;base64," + mp3);
+    replyAudio = audio;
+    const fallback = () => { if (replyAudio === audio) speak(text); };
+    audio.onplaying = () => { if (replyAudio === audio) state("speaking", "Фокси говорит"); };
+    audio.onended = () => {
+      if (replyAudio !== audio) return;
+      stopReplyAudio();
+      state("idle", "Можно поговорить ещё");
+    };
+    audio.onerror = fallback;
+    audio.play().catch(fallback);
+    return;
+  }
   bubble.textContent=text;
   if(!synth||!window.SpeechSynthesisUtterance){state("idle","Ответ показан на экране");return}
   synth.cancel();
@@ -78,7 +101,7 @@ async function respond(heard,forceSearch=false){
     history.push({role:"user",content:heard},{role:"assistant",content:r.reply});
     history=history.slice(-8);
     turnsSinceLearn++;
-    speak(r.reply);
+    speak(r.reply,r.audio_mp3);
     if(turnsSinceLearn>=4 && history.length>=6 && !learning){
       turnsSinceLearn=0;
       learning=true;
@@ -91,7 +114,7 @@ async function respond(heard,forceSearch=false){
 }
 textForm.addEventListener("submit",e=>{e.preventDefault();const value=textInput.value.trim();if(!value)return;textInput.value="";respond(value)});
 document.getElementById("demo").addEventListener("click",()=>{if(sending)return;greeting=openingText();speak(greeting)});
-listen.addEventListener("click",()=>{if(busy||sending)return;if(!Recognition){state("idle","Браузер не поддерживает распознавание речи");return}if(synth)synth.cancel();const rec=new Recognition();rec.lang="ru-RU";rec.interimResults=false;rec.onstart=()=>{busy=true;state("listening","Я тебя слушаю");bubble.textContent="Я слушаю!"};rec.onresult=e=>respond(e.results[0][0].transcript);rec.onerror=e=>{state("idle",e.error==="not-allowed"?"Разреши микрофон в браузере":"Не расслышал, повтори");bubble.textContent="Попробуем ещё?"};rec.onend=()=>{busy=false;if(fox.dataset.state==="listening")state("idle","Попробуй ещё раз")};try{rec.start()}catch(e){state("idle","Не получилось включить микрофон")}});
+listen.addEventListener("click",()=>{if(busy||sending)return;if(!Recognition){state("idle","Браузер не поддерживает распознавание речи");return}stopReplyAudio();if(synth)synth.cancel();const rec=new Recognition();rec.lang="ru-RU";rec.interimResults=false;rec.onstart=()=>{busy=true;state("listening","Я тебя слушаю");bubble.textContent="Я слушаю!"};rec.onresult=e=>respond(e.results[0][0].transcript);rec.onerror=e=>{state("idle",e.error==="not-allowed"?"Разреши микрофон в браузере":"Не расслышал, повтори");bubble.textContent="Попробуем ещё?"};rec.onend=()=>{busy=false;if(fox.dataset.state==="listening")state("idle","Попробуй ещё раз")};try{rec.start()}catch(e){state("idle","Не получилось включить микрофон")}});
 document.getElementById("adult").addEventListener("click",()=>{document.getElementById("info").showModal();loadParentNotes();});
 
 const usageButton=document.getElementById("usage-refresh");
