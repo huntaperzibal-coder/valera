@@ -132,9 +132,9 @@ async function loadAutoMemories(){
     autoList.replaceChildren();
     if(!data.available){autoStatus.textContent="SQLite на сервере недоступен. Проверь расширение pdo_sqlite.";return}
     if(!data.memories.length){
-      const labels={not_started:"Анализ разговоров пока не запускался.",analyzing:"Фокси анализирует разговор.",no_facts:"Анализ прошёл, но фактов для памяти не найдено.",facts_filtered:"Найденные факты не прошли проверку.",db_unavailable:"База SQLite недоступна.",not_enough_turns:"Для анализа недостаточно реплик.",db_write_failed:"Не удалось записать результат в SQLite."};
+      const labels={not_started:"Анализ разговоров пока не запускался.",analyzing:"Фокси анализирует разговор.",no_facts:"Анализ прошёл, но фактов для памяти не найдено.",facts_filtered:"Найденные факты не прошли проверку.",db_unavailable:"База SQLite недоступна.",not_enough_turns:"Для анализа недостаточно реплик.",db_write_failed:"Не удалось записать результат в SQLite.",sqlite_readonly:"SQLite запрещает запись: проверь права на файл и папку.",sqlite_locked:"База SQLite заблокирована другим процессом.",sqlite_io:"Ошибка ввода-вывода SQLite.",sqlite_syntax:"Ошибка SQL-запроса.",sqlite_schema:"Не найдена таблица SQLite.",sqlite_constraint:"Конфликт ограничений базы SQLite."};
       const d=data.diagnostic||{};
-      const info=labels[d.status]||(d.status?.startsWith("provider_error_")?"Ошибка подключения к модели.":d.status?.startsWith("empty_model_reply")?"Модель вернула пустой ответ.":d.status?.startsWith("invalid_json")?"Модель вернула неверный формат ответа.":"Пока нет воспоминаний.");
+      const info=labels[d.status]||(d.status?.startsWith("provider_error_")?"Ошибка подключения к модели.":d.status?.startsWith("empty_model_reply")?"Модель вернула пустой ответ.":d.status?.startsWith("invalid_json")?"Модель вернула неверный формат ответа.":d.status?.startsWith("sqlite_error_")?"Ошибка SQLite, код "+d.status.slice(13):"Пока нет воспоминаний.");
       autoStatus.textContent=info+" Для обновления нужно несколько осмысленных реплик.";return
     }
     autoStatus.textContent="Сохранено: "+data.memories.length;
