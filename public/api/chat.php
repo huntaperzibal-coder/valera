@@ -27,12 +27,26 @@ if (empty($_SERVER['HTTPS']) || $_SERVER['HTTPS'] === 'off') {
 ini_set('session.use_strict_mode', '1');
 $sessionLifetime = 7 * 86400;
 $sessionDir = dirname($configPath) . '/sessions';
-if (is_dir($sessionDir) || @mkdir($sessionDir, 0700) || is_dir($sessionDir)) {
+if ((is_dir($sessionDir) || @mkdir($sessionDir, 0700) || is_dir($sessionDir)) && is_writable($sessionDir)) {
     session_save_path($sessionDir);
     ini_set('session.gc_maxlifetime', (string)$sessionLifetime);
 }
 session_set_cookie_params(['lifetime'=>$sessionLifetime,'path'=>'/','secure'=>true,'httponly'=>true,'samesite'=>'Strict']);
 session_start();
+$rememberCookie = '__Host-foxy-parent';
+$rememberKey = hash_hmac('sha256', 'foxy-parent:' . $config['parent_password_hash'], $config['api_key']);
+$remember = $_COOKIE[$rememberCookie] ?? '';
+if (empty($_SESSION['valera_parent']) && is_string($remember)
+    && preg_match('/\A([0-9]{10}\.[a-f0-9]{32})\.([a-f0-9]{64})\z/', $remember, $parts)
+    && hash_equals(hash_hmac('sha256', $parts[1], $rememberKey), $parts[2])) {
+    $expires = (int)substr($parts[1], 0, 10);
+    if ($expires > time() && $expires <= time() + $sessionLifetime) {
+        session_regenerate_id(true);
+        $_SESSION['valera_parent'] = true;
+        $_SESSION['valera_parent_until'] = $expires;
+        $_SESSION['valera_csrf'] = bin2hex(random_bytes(16));
+    }
+}
 $body = json_decode(file_get_contents('php://input') ?: '', true);
 if (!is_array($body)) {
     http_response_code(400); echo json_encode(['error'=>'Неверный JSON'], JSON_UNESCAPED_UNICODE); exit;
@@ -150,6 +164,10 @@ if ($action === 'login') {
     session_regenerate_id(true);
     $_SESSION['valera_parent'] = true;
     $_SESSION['valera_parent_until'] = time() + $sessionLifetime;
+    $rememberValue = $_SESSION['valera_parent_until'] . '.' . bin2hex(random_bytes(16));
+    setcookie($rememberCookie, $rememberValue . '.' . hash_hmac('sha256', $rememberValue, $rememberKey), [
+        'expires'=>$_SESSION['valera_parent_until'], 'path'=>'/', 'secure'=>true, 'httponly'=>true, 'samesite'=>'Strict',
+    ]);
     $_SESSION['valera_csrf'] = bin2hex(random_bytes(16));
     echo json_encode(['ok'=>true,'csrf'=>$_SESSION['valera_csrf']]); exit;
 }

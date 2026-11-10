@@ -90,3 +90,5 @@
 .stage .voice-indicator { right: 12%; }
 .fox-animated[data-state="speaking"] .foxy-head { animation: foxy-nod .85s ease-in-out infinite alternate; }
 @keyframes foxy-nod { from { transform: rotate(-2deg); } to { transform: rotate(3deg) translateY(-2px); } }
+
+.visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
