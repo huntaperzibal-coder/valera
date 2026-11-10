@@ -265,6 +265,22 @@ if ($action === 'usage') {
 if ($action === 'status') {
     echo json_encode(['ok'=>true,'csrf'=>$_SESSION['valera_csrf'] ?? '']); exit;
 }
+if ($action === 'greeting') {
+    $token = $_SESSION['valera_csrf'] ?? '';
+    if ($token === '' || !hash_equals($token, (string)($body['csrf'] ?? ''))) {
+        http_response_code(403);
+        echo json_encode(['error'=>'Доступ запрещён'], JSON_UNESCAPED_UNICODE); exit;
+    }
+    if (time() - ($_SESSION['foxy_greeting_at'] ?? 0) < 15) {
+        http_response_code(429);
+        echo json_encode(['error'=>'Попробуй чуть позже'], JSON_UNESCAPED_UNICODE); exit;
+    }
+    $_SESSION['foxy_greeting_at'] = time();
+    session_write_close();
+    require_once __DIR__ . '/_speech.php';
+    $reply = 'Привет! Я Фокси. Рада тебя видеть! Что расскажешь?';
+    echo json_encode(['reply'=>$reply, 'audio_mp3'=>foxySynthesize($reply, $config)], JSON_UNESCAPED_UNICODE); exit;
+}
 if ($action !== 'chat' || !hash_equals((string)($_SESSION['valera_csrf'] ?? ''), (string)($body['csrf'] ?? ''))) {
     http_response_code(403); echo json_encode(['error'=>'Доступ запрещён'], JSON_UNESCAPED_UNICODE); exit;
 }

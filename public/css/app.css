@@ -49,3 +49,30 @@
 .web-panel h3{margin:0 0 6px}.web-panel p{font-size:13px;line-height:1.45}
 #web-sources{display:flex;flex-direction:column;gap:7px;overflow-wrap:anywhere}
 #web-sources a{font-size:13px;color:#286747}
+
+/* Animated, phone-first Foxy scene */
+.app { background: linear-gradient(#dceee4, #f7ebd6 72%); }
+.stage { min-height: 310px; isolation: isolate; align-items: center; padding: 94px 10px 8px; }
+.stage .sun, .stage .grass { display: none; }
+#bubble { width: min(90%, 510px); min-width: 0; margin: 0; padding: 10px 15px; max-height: 90px; overflow: auto; }
+.fox-animated { z-index: 2; width: min(74vw, 320px); height: auto; max-height: 36svh; overflow: visible; }
+.foxy-head, .foxy-tail, .foxy-eyes, .foxy-mouth { transform-box: fill-box; transform-origin: center; }
+.foxy-head { transition: transform .25s ease; transform-origin: 55% 80%; }
+.foxy-tail { transform-origin: 8% 90%; animation: foxy-sway 3s ease-in-out infinite alternate; }
+.foxy-eyes { animation: foxy-blink 4.7s ease-in-out infinite; }
+.foxy-mouth { opacity: 0; }
+.fox-animated[data-state="listening"] .foxy-head { transform: rotate(9deg); }
+.fox-animated[data-state="thinking"] .foxy-head { transform: rotate(-8deg) translateY(-4px); }
+.fox-animated[data-state="thinking"] .foxy-eyes { transform: translateY(-3px); animation: none; }
+.fox-animated[data-state="speaking"] .foxy-mouth { opacity: 1; animation: foxy-mouth .32s ease-in-out infinite alternate; }
+@keyframes foxy-sway { to { transform: rotate(8deg); } }
+@keyframes foxy-blink { 0%, 45%, 49%, 100% { transform: scaleY(1); } 47% { transform: scaleY(.08); } }
+@keyframes foxy-mouth { from { transform: scaleY(.22); } to { transform: scaleY(1); } }
+.stage .voice-indicator { top: auto; left: auto; right: 5%; bottom: 4px; transform: scale(.55); transform-origin: right bottom; }
+.controls .talk { order: -1; width: min(100%, 520px); }
+@media (max-width: 600px) {
+  header { padding: 10px 16px; }
+  .controls { padding: 12px; }
+  .controls button { padding: 9px 14px; }
+  .controls .talk { min-height: 52px; }
+}
