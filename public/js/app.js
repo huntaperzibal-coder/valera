@@ -23,7 +23,8 @@ function openingText(){
 let greeting=openingText();
 bubble.textContent=greeting;
 
-function state(s,t){fox.dataset.state=s;document.getElementById("voice-indicator").dataset.state=s;status.textContent=t;
+function state(s,t,showMessage=false){
+  status.classList.toggle("visually-hidden", !showMessage);fox.dataset.state=s;document.getElementById("voice-indicator").dataset.state=s;status.textContent=t;
   listen.dataset.listening = String(s === "listening");
   listen.setAttribute("aria-pressed", String(s === "listening"));
   document.getElementById("mic-symbol").textContent = s === "listening" ? "🔴" : "🎤";
@@ -67,7 +68,7 @@ function speak(text, mp3, allowBrowserVoice=true){
     return;
   }
   bubble.textContent=text;
-  if (!allowBrowserVoice) { state("idle", "Голос Марины недоступен"); return; }
+  if (!allowBrowserVoice) { state("idle","Голос Марины недоступен",true); return; }
   if(!synth||!window.SpeechSynthesisUtterance){state("idle","Ответ показан на экране");return}
   synth.cancel();
   const cleaned=speechText(text);
@@ -81,7 +82,7 @@ function speak(text, mp3, allowBrowserVoice=true){
   u.pitch=1.05;
   u.onstart=()=>state("speaking","Фокси говорит");
   u.onend=()=>state("idle","Можно поговорить ещё");
-  u.onerror=()=>state("idle","Озвучка недоступна");
+  u.onerror=()=>state("idle","Озвучка недоступна",true);
   synth.speak(u);
 }
 async function request(data, signal){const r=await fetch("/api/chat.php",{method:"POST",cache:"no-store",signal,credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});const j=await r.json();if(!r.ok){if(r.status===401)csrf="";const error=new Error((j.error||"Не удалось получить ответ")+(j.finish_reason?" (причина: "+j.finish_reason+")":""));error.status=r.status;throw error;}return j}
@@ -113,11 +114,11 @@ if (navigator.onLine) checkPresence();
 else showPresence(false, "Нет связи");
 async function parentLogin(){
   if(csrf)return true;
-  try{const s=await request({action:"status"});csrf=s.csrf;return true}catch(e){if(e.status!==401){state("idle","Не удалось проверить вход");return false;}}
+  try{const s=await request({action:"status"});csrf=s.csrf;return true}catch(e){if(e.status!==401){state("idle","Не удалось проверить вход",true);return false;}}
   const password=window.prompt("Для включения ИИ взрослый должен ввести пароль доступа:");
   if(password===null)return false;
   try{const s=await request({action:"login",password});csrf=s.csrf;showPresence(true,"В сети");state("idle","ИИ подключён, можно поговорить");return true}
-  catch(e){state("idle",e.message);bubble.textContent="Нужен родительский вход";return false}
+  catch(e){state("idle",e.message,true);bubble.textContent="Нужен родительский вход";return false}
 }
 async function respond(heard,forceSearch=false){
   heard=String(heard||"").trim();
@@ -125,7 +126,7 @@ async function respond(heard,forceSearch=false){
   if(sending)return;
   sending=true;sendText.disabled=true;listen.disabled=true;
   try{
-    if(!(await parentLogin())){state("idle","Сначала нужен взрослый");return}
+    if(!(await parentLogin())){state("idle","Сначала нужен взрослый",true);return}
     state("thinking","Готовлю ответ…");bubble.textContent="Сейчас подумаю…";
     const r=await request({action:"chat",csrf,message:heard,history:history.length ? history : [{role:"assistant",content:greeting}],context:timeContext(),search:forceSearch});
     showWebResult(r.web);
@@ -140,7 +141,7 @@ async function respond(heard,forceSearch=false){
       // Nonblocking: never delay a spoken response to write optional memories.
       request({action:"memory_learn",csrf,turns}).catch(e=>{console.warn("Фокси: память не обновилась",e.message)}).finally(()=>{learning=false});
     }
-  }catch(e){state("idle",e.message);bubble.textContent="Кажется, связь пропала. Давай попробуем позже."}
+  }catch(e){state("idle",e.message,true);bubble.textContent="Кажется, связь пропала. Давай попробуем позже."}
   finally{sending=false;sendText.disabled=false;listen.disabled=false}
 }
 textForm.addEventListener("submit",e=>{e.preventDefault();const value=textInput.value.trim();if(!value)return;textInput.value="";respond(value)});
@@ -156,13 +157,61 @@ async function playMarinaGreeting(){
     greeting = result.reply;
     speak(greeting, result.audio_mp3, false);
   } catch (error) {
-    state("idle", error.message);
+    state("idle",error.message,true);
   } finally {
     sending = false;
   }
 }
 document.getElementById("demo").addEventListener("click",playMarinaGreeting);
-listen.addEventListener("click",()=>{if(busy||sending)return;if(!Recognition){state("idle","Браузер не поддерживает распознавание речи");return}stopReplyAudio();if(synth)synth.cancel();const rec=new Recognition();rec.lang="ru-RU";rec.interimResults=false;rec.onstart=()=>{busy=true;state("listening","Микрофон включён");bubble.textContent="Я слушаю!"};rec.onresult=e=>respond(e.results[0][0].transcript);rec.onerror=e=>{state("idle",e.error==="not-allowed"?"Разреши микрофон в браузере":"Не расслышал, повтори");bubble.textContent="Попробуем ещё?"};rec.onend=()=>{busy=false;if(fox.dataset.state==="listening")state("idle","Попробуй ещё раз")};try{busy=true;rec.start()}catch(e){busy=false;state("idle","Не получилось включить микрофон")}});
+let activeRecognition = null;
+listen.addEventListener("click", () => {
+  if (sending) return;
+  if (activeRecognition) {
+    try { activeRecognition.stop(); } catch (error) {
+      if (error.name !== "InvalidStateError") state("idle", "Не получилось выключить микрофон", true);
+    }
+    return;
+  }
+  if (!Recognition) {
+    state("idle", "Браузер не поддерживает микрофон для разговора", true);
+    return;
+  }
+  stopReplyAudio();
+  synth?.cancel();
+  const rec = new Recognition();
+  rec.lang = "ru-RU";
+  rec.interimResults = false;
+  rec.onstart = () => {
+    state("listening", "Микрофон включён");
+    bubble.textContent = "Я слушаю!";
+  };
+  rec.onresult = event => respond(event.results[0][0].transcript);
+  rec.onerror = event => {
+    const messages = {
+      "not-allowed": "Разреши микрофон для сайта в браузере",
+      "audio-capture": "Браузер не видит микрофон",
+      "network": "Служба распознавания речи недоступна",
+      "no-speech": "Не расслышала. Попробуй ещё раз"
+    };
+    state("idle", messages[event.error] || "Не удалось распознать речь", true);
+  };
+  rec.onend = () => {
+    activeRecognition = null;
+    busy = false;
+    if (!sending && fox.dataset.state === "listening") {
+      state("idle", "Не расслышала. Попробуй ещё раз", true);
+    }
+  };
+  try {
+    activeRecognition = rec;
+    busy = true;
+    rec.start();
+  } catch {
+    activeRecognition = null;
+    busy = false;
+    state("idle", "Не получилось включить микрофон", true);
+  }
+});
 document.getElementById("adult").addEventListener("click",()=>{document.getElementById("info").showModal();loadParentNotes();});
 
 const usageButton=document.getElementById("usage-refresh");
