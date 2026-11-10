@@ -80,8 +80,13 @@
 #foxy-presence[data-online="true"] { color: #24633d; }
 .presence-label { display: block; font-size: 12px; font-weight: 650; }
 
-.speaker-status { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; }
-.speaker-status span { padding: 5px 12px; border-radius: 20px; background: #f6ecdc; font-size: 14px; font-weight: 750; }
-.speaker-status[data-state="listening"] #valera-state { background: #d9eef9; color: #164b68; }
-.speaker-status[data-state="speaking"] #foxy-state { background: #ffdfbf; color: #793809; }
-.speaker-status[data-state="thinking"] #foxy-state { background: #fff0b8; color: #634b13; }
+
+#listen[data-listening="true"] { background: #176973; box-shadow: 0 5px 0 #104950; }
+.mic-waves { display: none; }
+#listen[data-listening="true"] .mic-waves { display: inline-flex; vertical-align: middle; align-items: center; gap: 4px; height: 24px; margin-left: 8px; }
+.mic-waves i { width: 4px; height: 10px; border-radius: 4px; background: currentColor; animation: voice-bar .55s ease-in-out infinite alternate; }
+.mic-waves i:nth-child(2) { animation-delay: -.24s; }
+.stage .voice-indicator[data-state="listening"] { opacity: 0; }
+.stage .voice-indicator { right: 12%; }
+.fox-animated[data-state="speaking"] .foxy-head { animation: foxy-nod .85s ease-in-out infinite alternate; }
+@keyframes foxy-nod { from { transform: rotate(-2deg); } to { transform: rotate(3deg) translateY(-2px); } }

@@ -24,9 +24,9 @@ let greeting=openingText();
 bubble.textContent=greeting;
 
 function state(s,t){fox.dataset.state=s;document.getElementById("voice-indicator").dataset.state=s;status.textContent=t;
-  document.getElementById("speaker-status").dataset.state=s;
-  document.getElementById("valera-state").textContent=s==="listening" ? "🎙 Валера говорит" : "🎙 Валера";
-  document.getElementById("foxy-state").textContent=s==="speaking" ? "✦ Фокси говорит" : s==="thinking" ? "✦ Фокси думает" : "✦ Фокси";
+  listen.dataset.listening = String(s === "listening");
+  listen.setAttribute("aria-pressed", String(s === "listening"));
+  document.getElementById("mic-symbol").textContent = s === "listening" ? "🔴" : "🎤";
 }
 function speechText(text){
   return String(text).replace(/[\p{Extended_Pictographic}\uFE0E\uFE0F\u200D]/gu,"").replace(/[*_#\x60~]/g,"").replace(/https?:\/\/\S+/g,"").replace(/\s+/g," ").trim();
@@ -84,7 +84,7 @@ function speak(text, mp3, allowBrowserVoice=true){
   u.onerror=()=>state("idle","Озвучка недоступна");
   synth.speak(u);
 }
-async function request(data, signal){const r=await fetch("/api/chat.php",{method:"POST",cache:"no-store",signal,credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});const j=await r.json();if(!r.ok)throw new Error((j.error||"Не удалось получить ответ")+(j.finish_reason?" (причина: "+j.finish_reason+")":""));return j}
+async function request(data, signal){const r=await fetch("/api/chat.php",{method:"POST",cache:"no-store",signal,credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});const j=await r.json();if(!r.ok){if(r.status===401)csrf="";const error=new Error((j.error||"Не удалось получить ответ")+(j.finish_reason?" (причина: "+j.finish_reason+")":""));error.status=r.status;throw error;}return j}
 function showPresence(online, label){
   document.getElementById("foxy-presence").dataset.online = String(online);
   const status = document.getElementById("foxy-presence-label");
@@ -113,7 +113,7 @@ if (navigator.onLine) checkPresence();
 else showPresence(false, "Нет связи");
 async function parentLogin(){
   if(csrf)return true;
-  try{const s=await request({action:"status"});csrf=s.csrf;return true}catch(e){}
+  try{const s=await request({action:"status"});csrf=s.csrf;return true}catch(e){if(e.status!==401){state("idle","Не удалось проверить вход");return false;}}
   const password=window.prompt("Для включения ИИ взрослый должен ввести пароль доступа:");
   if(password===null)return false;
   try{const s=await request({action:"login",password});csrf=s.csrf;showPresence(true,"В сети");state("idle","ИИ подключён, можно поговорить");return true}
@@ -145,7 +145,7 @@ async function respond(heard,forceSearch=false){
 }
 textForm.addEventListener("submit",e=>{e.preventDefault();const value=textInput.value.trim();if(!value)return;textInput.value="";respond(value)});
 let marinaGreeting = null;
-document.getElementById("demo").addEventListener("click", async () => {
+async function playMarinaGreeting(){
   if (sending || busy) return;
   sending = true;
   try {
@@ -160,7 +160,8 @@ document.getElementById("demo").addEventListener("click", async () => {
   } finally {
     sending = false;
   }
-});
+}
+document.getElementById("demo").addEventListener("click",playMarinaGreeting);
 listen.addEventListener("click",()=>{if(busy||sending)return;if(!Recognition){state("idle","Браузер не поддерживает распознавание речи");return}stopReplyAudio();if(synth)synth.cancel();const rec=new Recognition();rec.lang="ru-RU";rec.interimResults=false;rec.onstart=()=>{busy=true;state("listening","Микрофон включён");bubble.textContent="Я слушаю!"};rec.onresult=e=>respond(e.results[0][0].transcript);rec.onerror=e=>{state("idle",e.error==="not-allowed"?"Разреши микрофон в браузере":"Не расслышал, повтори");bubble.textContent="Попробуем ещё?"};rec.onend=()=>{busy=false;if(fox.dataset.state==="listening")state("idle","Попробуй ещё раз")};try{busy=true;rec.start()}catch(e){busy=false;state("idle","Не получилось включить микрофон")}});
 document.getElementById("adult").addEventListener("click",()=>{document.getElementById("info").showModal();loadParentNotes();});
 
@@ -193,7 +194,7 @@ document.getElementById("memory-load").addEventListener("click",loadParentNotes)
 document.getElementById("memory-save").addEventListener("click",async()=>{try{if(!(await parentLogin()))return;await request({action:"memory_save",csrf,notes:memoryNotes.value});memoryStatus.textContent="Память сохранена"}catch(e){memoryStatus.textContent=e.message}});
 document.getElementById("memory-clear").addEventListener("click",async()=>{if(!confirm("Удалить все воспоминания Фокси?"))return;try{if(!(await parentLogin()))return;await request({action:"memory_save",csrf,notes:""});memoryNotes.value="";memoryStatus.textContent="Память очищена"}catch(e){memoryStatus.textContent=e.message}});
 document.getElementById("voice-choice").addEventListener("change",e=>localStorage.setItem("foxy_voice",e.target.value));
-document.getElementById("voice-test").addEventListener("click",()=>speak("Привет! Я Фокси. Как тебе мой голос?"));
+document.getElementById("voice-test").addEventListener("click",playMarinaGreeting);
 
 const autoList=document.getElementById("auto-memory-list");
 const autoStatus=document.getElementById("auto-memory-status");

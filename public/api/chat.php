@@ -25,7 +25,13 @@ if (empty($_SERVER['HTTPS']) || $_SERVER['HTTPS'] === 'off') {
     http_response_code(403); echo json_encode(['error'=>'Требуется HTTPS'], JSON_UNESCAPED_UNICODE); exit;
 }
 ini_set('session.use_strict_mode', '1');
-session_set_cookie_params(['lifetime'=>0,'path'=>'/','secure'=>true,'httponly'=>true,'samesite'=>'Strict']);
+$sessionLifetime = 7 * 86400;
+$sessionDir = dirname($configPath) . '/sessions';
+if (is_dir($sessionDir) || @mkdir($sessionDir, 0700) || is_dir($sessionDir)) {
+    session_save_path($sessionDir);
+    ini_set('session.gc_maxlifetime', (string)$sessionLifetime);
+}
+session_set_cookie_params(['lifetime'=>$sessionLifetime,'path'=>'/','secure'=>true,'httponly'=>true,'samesite'=>'Strict']);
 session_start();
 $body = json_decode(file_get_contents('php://input') ?: '', true);
 if (!is_array($body)) {
@@ -143,10 +149,11 @@ if ($action === 'login') {
     @unlink($rateFile);
     session_regenerate_id(true);
     $_SESSION['valera_parent'] = true;
+    $_SESSION['valera_parent_until'] = time() + $sessionLifetime;
     $_SESSION['valera_csrf'] = bin2hex(random_bytes(16));
     echo json_encode(['ok'=>true,'csrf'=>$_SESSION['valera_csrf']]); exit;
 }
-if (empty($_SESSION['valera_parent'])) {
+if (empty($_SESSION['valera_parent']) || time() >= ($_SESSION['valera_parent_until'] ?? 0)) {
     http_response_code(401); echo json_encode(['error'=>'Сначала нужен родительский вход'], JSON_UNESCAPED_UNICODE); exit;
 }
 // Parent-managed, minimal long-term memory. No raw dialogue is persisted.
