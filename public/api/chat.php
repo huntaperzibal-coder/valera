@@ -98,6 +98,17 @@ function foxyUsageSummary(): array {
 }
 
 require_once __DIR__ . '/_memory.php';
+function foxyMemoryDiagnostic(string $status, int $saved = 0): void {
+    $path=dirname(__DIR__,3) . '/valera-private/memory-status.json';
+    $out=json_encode(['status'=>$status,'saved'=>$saved,'at'=>gmdate('c')],JSON_UNESCAPED_UNICODE);
+    if ($out!==false) { @file_put_contents($path,$out,LOCK_EX); @chmod($path,0600); }
+}
+function foxyMemoryLastDiagnostic(): array {
+    $path=dirname(__DIR__,3) . '/valera-private/memory-status.json';
+    $value=is_file($path) ? json_decode((string)@file_get_contents($path),true) : null;
+    return is_array($value) ? $value : ['status'=>'not_started','saved'=>0,'at'=>null];
+}
+
 $action = $body['action'] ?? 'chat';
 if ($action === 'login') {
     $password = is_string($body['password'] ?? null) ? $body['password'] : '';
@@ -158,7 +169,7 @@ if ($action === 'memory_save') {
 // Automatic memory can be viewed and cleared only by a logged-in adult.
 if ($action === 'memory_list') {
     $db = foxyMemoryDb();
-    echo json_encode(['memories'=>$db ? foxyMemoryRows($db) : [],'available'=>(bool)$db], JSON_UNESCAPED_UNICODE); exit;
+    echo json_encode(['memories'=>$db ? foxyMemoryRows($db) : [],'available'=>(bool)$db,'diagnostic'=>foxyMemoryLastDiagnostic()], JSON_UNESCAPED_UNICODE); exit;
 }
 if ($action === 'memory_delete' || $action === 'memory_clear_auto') {
     if (!hash_equals((string)($_SESSION['valera_csrf'] ?? ''), (string)($body['csrf'] ?? ''))) {
@@ -180,7 +191,7 @@ if ($action === 'memory_learn') {
         http_response_code(403); echo json_encode(['error'=>'Доступ запрещён'], JSON_UNESCAPED_UNICODE); exit;
     }
     $db = foxyMemoryDb();
-    if (!$db) { http_response_code(503); echo json_encode(['error'=>'Память SQLite недоступна'], JSON_UNESCAPED_UNICODE); exit; }
+    if (!$db) { foxyMemoryDiagnostic('db_unavailable'); http_response_code(503); echo json_encode(['error'=>'Память SQLite недоступна'], JSON_UNESCAPED_UNICODE); exit; }
     if (time() - (int)($_SESSION['foxy_last_learn'] ?? 0) < 60) {
         echo json_encode(['ok'=>true,'skipped'=>'rate_limit'], JSON_UNESCAPED_UNICODE); exit;
     }
@@ -190,24 +201,39 @@ if ($action === 'memory_learn') {
         $text=trim($turn['content']);
         if ($text!=='' && mb_strlen($text,'UTF-8')<=500) $turns[]=['role'=>$turn['role'],'content'=>$text];
     }
-    if (count($turns)<6) { http_response_code(400); echo json_encode(['error'=>'Недостаточно реплик'], JSON_UNESCAPED_UNICODE); exit; }
+    if (count($turns)<6) { foxyMemoryDiagnostic('not_enough_turns'); http_response_code(400); echo json_encode(['error'=>'Недостаточно реплик'], JSON_UNESCAPED_UNICODE); exit; }
     $_SESSION['foxy_last_learn'] = time();
+    foxyMemoryDiagnostic('analyzing');
     session_write_close();
     $existing = foxyMemoryRows($db,20);
     $system = 'Из короткой беседы ребёнка с вымышленным лисёнком извлеки не более трёх устойчивых и явно названных интересов, предпочтений или сюжетных деталей совместной сказки. Не сохраняй имена, возраст, адрес, школу, местоположение, контакты, медицинские сведения, семью, страхи, секреты, конфликты, личные данные, эмоции или дословную переписку. Если нет явно полезных безопасных фактов, верни пустой массив. Учитывай существующие записи, исправляй устаревшие предпочтения тем же ключом. Ничего не додумывай. Верни только JSON, строго формат {"memories":[{"kind":"interest|preference|story","key":"latin_slug","content":"краткий факт по-русски"}]}. В ключе только латинские строчные буквы, цифры и подчёркивания. Записи: ' . json_encode(array_map(function($e){return $e['content'];},$existing),JSON_UNESCAPED_UNICODE);
-    $learnPayload = json_encode(['model'=>'gpt://' . $config['folder_id'] . '/' . ($config['model'] ?? 'qwen3.6-35b-a3b'),'messages'=>[['role'=>'system','content'=>$system],['role'=>'user','content'=>json_encode($turns,JSON_UNESCAPED_UNICODE)]],'max_completion_tokens'=>450,'reasoning_effort'=>'none','store'=>false,'stream'=>false],JSON_UNESCAPED_UNICODE);
+    $learnPayload = json_encode(['model'=>'gpt://' . $config['folder_id'] . '/' . ($config['model'] ?? 'qwen3.6-35b-a3b'),'messages'=>[['role'=>'system','content'=>$system],['role'=>'user','content'=>json_encode($turns,JSON_UNESCAPED_UNICODE)]],'max_completion_tokens'=>900,'reasoning_effort'=>'none','store'=>false,'stream'=>false],JSON_UNESCAPED_UNICODE);
     $ch=curl_init('https://ai.api.cloud.yandex.net/v1/chat/completions');
     curl_setopt_array($ch,[CURLOPT_POST=>true,CURLOPT_HTTPHEADER=>['Authorization: Api-Key ' . $config['api_key'],'Content-Type: application/json'],CURLOPT_POSTFIELDS=>$learnPayload,CURLOPT_RETURNTRANSFER=>true,CURLOPT_TIMEOUT=>35,CURLOPT_CONNECTTIMEOUT=>8,CURLOPT_SSL_VERIFYPEER=>true,CURLOPT_SSL_VERIFYHOST=>2]);
     $raw=curl_exec($ch);
     $code=(int)curl_getinfo($ch,CURLINFO_HTTP_CODE);
     curl_close($ch);
-    if ($raw===false || $code<200 || $code>=300) { http_response_code(502); echo json_encode(['error'=>'Не удалось обновить память'],JSON_UNESCAPED_UNICODE); exit; }
+    if ($raw===false || $code<200 || $code>=300) { foxyMemoryDiagnostic('provider_error_' . $code); http_response_code(502); echo json_encode(['error'=>'Не удалось обновить память'],JSON_UNESCAPED_UNICODE); exit; }
     $ai=json_decode($raw,true);
     if (is_array($ai['usage'] ?? null)) foxyRecordUsage($ai['usage'],(string)($config['model'] ?? 'qwen3.6-35b-a3b'),$code);
     $json=trim((string)($ai['choices'][0]['message']['content'] ?? ''));
-    $json=preg_replace('/^\\x60\\x60\\x60(?:json)?\\s*|\\s*\\x60\\x60\\x60$/iu','',$json);
+    // Models sometimes wrap valid JSON in fences or a short preface.
+    $start=strpos($json,'{');
+    $end=strrpos($json,'}');
+    if ($start!==false && $end!==false && $end>=$start) $json=substr($json,$start,$end-$start+1);
     $facts=json_decode($json,true);
-    $saved=is_array($facts['memories'] ?? null) ? foxyMemoryUpdate($db,$facts['memories']) : 0;
+    if (!is_array($facts) || !is_array($facts['memories'] ?? null)) {
+        $reason=(string)($ai['choices'][0]['finish_reason'] ?? 'unknown');
+        foxyMemoryDiagnostic($json==='' ? 'empty_model_reply_'.$reason : 'invalid_json_'.$reason);
+        echo json_encode(['ok'=>true,'saved'=>0,'reason'=>'invalid_model_output'],JSON_UNESCAPED_UNICODE); exit;
+    }
+    try {
+        $saved=foxyMemoryUpdate($db,$facts['memories']);
+    } catch (Throwable $e) {
+        foxyMemoryDiagnostic('db_write_failed');
+        http_response_code(500); echo json_encode(['error'=>'Не удалось записать память'],JSON_UNESCAPED_UNICODE); exit;
+    }
+    foxyMemoryDiagnostic($saved>0 ? 'saved' : (count($facts['memories'])===0 ? 'no_facts' : 'facts_filtered'),$saved);
     echo json_encode(['ok'=>true,'saved'=>$saved],JSON_UNESCAPED_UNICODE); exit;
 }
 if ($action === 'usage') {
