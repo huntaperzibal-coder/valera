@@ -95,9 +95,6 @@ async function respond(heard,forceSearch=false){
   sending=true;sendText.disabled=true;listen.disabled=true;
   try{
     if(!(await parentLogin())){state("idle","Сначала нужен взрослый");return}
-    const userBubble = document.getElementById("user-bubble");
-    userBubble.textContent = heard;
-    userBubble.hidden = false;
     state("thinking","Фокси думает");bubble.textContent="Сейчас подумаю…";
     const r=await request({action:"chat",csrf,message:heard,history:history.length ? history : [{role:"assistant",content:greeting}],context:timeContext(),search:forceSearch});
     showWebResult(r.web);
