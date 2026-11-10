@@ -103,6 +103,16 @@ function foxyMemoryDiagnostic(string $status, int $saved = 0): void {
     $out=json_encode(['status'=>$status,'saved'=>$saved,'at'=>gmdate('c')],JSON_UNESCAPED_UNICODE);
     if ($out!==false) { @file_put_contents($path,$out,LOCK_EX); @chmod($path,0600); }
 }
+function foxyMemoryDbError(Throwable $e): string {
+    $message=strtolower($e->getMessage());
+    if (strpos($message,'readonly')!==false || strpos($message,'read-only')!==false) return 'sqlite_readonly';
+    if (strpos($message,'locked')!==false || strpos($message,'busy')!==false) return 'sqlite_locked';
+    if (strpos($message,'disk i/o')!==false || strpos($message,'disk full')!==false) return 'sqlite_io';
+    if (strpos($message,'syntax')!==false) return 'sqlite_syntax';
+    if (strpos($message,'no such table')!==false) return 'sqlite_schema';
+    if (strpos($message,'constraint')!==false) return 'sqlite_constraint';
+    return 'sqlite_error_' . substr(hash('sha256',$e->getMessage()),0,8);
+}
 function foxyMemoryLastDiagnostic(): array {
     $path=dirname(__DIR__,3) . '/valera-private/memory-status.json';
     $value=is_file($path) ? json_decode((string)@file_get_contents($path),true) : null;
@@ -230,7 +240,7 @@ if ($action === 'memory_learn') {
     try {
         $saved=foxyMemoryUpdate($db,$facts['memories']);
     } catch (Throwable $e) {
-        foxyMemoryDiagnostic('db_write_failed');
+        foxyMemoryDiagnostic(foxyMemoryDbError($e));
         http_response_code(500); echo json_encode(['error'=>'Не удалось записать память'],JSON_UNESCAPED_UNICODE); exit;
     }
     foxyMemoryDiagnostic($saved>0 ? 'saved' : (count($facts['memories'])===0 ? 'no_facts' : 'facts_filtered'),$saved);
