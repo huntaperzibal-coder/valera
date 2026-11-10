@@ -28,13 +28,18 @@ function foxyMemoryIsSafe(string $text): bool {
 function foxyMemoryUpdate(PDO $db, array $entries): int {
     $allowed = ['interest','preference','story'];
     $saved = 0; $now = time();
-    $stmt = $db->prepare('INSERT INTO memories(kind,memory_key,content,created_at,updated_at) VALUES(:kind,:key,:content,:created,:updated) ON CONFLICT(memory_key) DO UPDATE SET content=excluded.content, updated_at=excluded.updated_at');
+    // Compatible with older SQLite builds: UPDATE first, INSERT if no existing row.
+    $update = $db->prepare('UPDATE memories SET kind = :kind, content = :content, updated_at = :updated WHERE memory_key = :key');
+    $insert = $db->prepare('INSERT INTO memories (kind, memory_key, content, created_at, updated_at) VALUES (:kind, :key, :content, :created, :updated)');
     foreach (array_slice($entries, 0, 3) as $entry) {
         if (!is_array($entry) || !in_array($entry['kind'] ?? '', $allowed, true)) continue;
         $content = trim((string)($entry['content'] ?? ''));
         $key = mb_strtolower(trim((string)($entry['key'] ?? '')), 'UTF-8');
         if (!foxyMemoryIsSafe($content) || !preg_match('/^[a-z0-9_\-]{3,45}$/', $key)) continue;
-        $stmt->execute([':kind'=>$entry['kind'],':key'=>$key,':content'=>$content,':created'=>$now,':updated'=>$now]);
+        $update->execute([':kind'=>$entry['kind'],':content'=>$content,':updated'=>$now,':key'=>$key]);
+        if ($update->rowCount() === 0) {
+            $insert->execute([':kind'=>$entry['kind'],':key'=>$key,':content'=>$content,':created'=>$now,':updated'=>$now]);
+        }
         $saved++;
     }
     // Keep at most 40 useful memories.
