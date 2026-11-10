@@ -80,13 +80,33 @@ function speak(text, mp3, allowBrowserVoice=true){
   u.onerror=()=>state("idle","Озвучка недоступна");
   synth.speak(u);
 }
-async function request(data){const r=await fetch("/api/chat.php",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});const j=await r.json();if(!r.ok)throw new Error((j.error||"Не удалось получить ответ")+(j.finish_reason?" (причина: "+j.finish_reason+")":""));return j}
+async function request(data, signal){const r=await fetch("/api/chat.php",{method:"POST",signal,credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});const j=await r.json();if(!r.ok)throw new Error((j.error||"Не удалось получить ответ")+(j.finish_reason?" (причина: "+j.finish_reason+")":""));return j}
+function showPresence(online, label){
+  document.getElementById("foxy-presence").dataset.online = String(online);
+  const status = document.getElementById("foxy-presence-label");
+  if (status.textContent !== label) status.textContent = label;
+}
+async function checkPresence(){
+  if (document.hidden || !navigator.onLine) return;
+  try {
+    const result = await request({action:"status"}, AbortSignal.timeout(5000));
+    showPresence(Boolean(result.ok && result.csrf), result.csrf ? "В сети" : "Нужен вход");
+  } catch (error) {
+    showPresence(false, error.message === "Сначала нужен родительский вход" ? "Нужен вход" : "Нет связи");
+  }
+}
+window.addEventListener("online", checkPresence);
+window.addEventListener("offline", () => showPresence(false, "Нет связи"));
+document.addEventListener("visibilitychange", checkPresence);
+setInterval(checkPresence, 30000);
+if (navigator.onLine) checkPresence();
+else showPresence(false, "Нет связи");
 async function parentLogin(){
   if(csrf)return true;
   try{const s=await request({action:"status"});csrf=s.csrf;return true}catch(e){}
   const password=window.prompt("Для включения ИИ взрослый должен ввести пароль доступа:");
   if(password===null)return false;
-  try{const s=await request({action:"login",password});csrf=s.csrf;state("idle","ИИ подключён, можно поговорить");return true}
+  try{const s=await request({action:"login",password});csrf=s.csrf;showPresence(true,"В сети");state("idle","ИИ подключён, можно поговорить");return true}
   catch(e){state("idle",e.message);bubble.textContent="Нужен родительский вход";return false}
 }
 async function respond(heard,forceSearch=false){

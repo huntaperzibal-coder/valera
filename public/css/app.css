@@ -76,3 +76,6 @@
   .controls button { padding: 9px 14px; }
   .controls .talk { min-height: 52px; }
 }
+
+#foxy-presence[data-online="true"] { color: #24633d; }
+.presence-label { display: block; font-size: 12px; font-weight: 650; }
