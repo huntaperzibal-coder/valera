@@ -96,7 +96,7 @@ async function respond(heard,forceSearch=false){
   try{
     if(!(await parentLogin())){state("idle","Сначала нужен взрослый");return}
     state("thinking","Фокси думает");bubble.textContent="Сейчас подумаю…";
-    const r=await request({action:"chat",csrf,message:heard,history,context:timeContext(),search:forceSearch});
+    const r=await request({action:"chat",csrf,message:heard,history:history.length ? history : [{role:"assistant",content:greeting}],context:timeContext(),search:forceSearch});
     showWebResult(r.web);
     history.push({role:"user",content:heard},{role:"assistant",content:r.reply});
     history=history.slice(-8);
