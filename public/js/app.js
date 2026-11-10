@@ -83,7 +83,7 @@ async function respond(heard){
       learning=true;
       const turns=history.slice();
       // Nonblocking: never delay a spoken response to write optional memories.
-      request({action:"memory_learn",csrf,turns}).catch(()=>{}).finally(()=>{learning=false});
+      request({action:"memory_learn",csrf,turns}).catch(e=>{console.warn("Фокси: память не обновилась",e.message)}).finally(()=>{learning=false});
     }
   }catch(e){state("idle",e.message);bubble.textContent="Кажется, связь пропала. Давай попробуем позже."}
   finally{sending=false;sendText.disabled=false;listen.disabled=false}
@@ -131,7 +131,12 @@ async function loadAutoMemories(){
     const data=await request({action:"memory_list"});
     autoList.replaceChildren();
     if(!data.available){autoStatus.textContent="SQLite на сервере недоступен. Проверь расширение pdo_sqlite.";return}
-    if(!data.memories.length){autoStatus.textContent="Пока нет автоматических воспоминаний. Они появятся после нескольких разговоров.";return}
+    if(!data.memories.length){
+      const labels={not_started:"Анализ разговоров пока не запускался.",analyzing:"Фокси анализирует разговор.",no_facts:"Анализ прошёл, но фактов для памяти не найдено.",facts_filtered:"Найденные факты не прошли проверку.",db_unavailable:"База SQLite недоступна.",not_enough_turns:"Для анализа недостаточно реплик.",db_write_failed:"Не удалось записать результат в SQLite."};
+      const d=data.diagnostic||{};
+      const info=labels[d.status]||(d.status?.startsWith("provider_error_")?"Ошибка подключения к модели.":d.status?.startsWith("empty_model_reply")?"Модель вернула пустой ответ.":d.status?.startsWith("invalid_json")?"Модель вернула неверный формат ответа.":"Пока нет воспоминаний.");
+      autoStatus.textContent=info+" Для обновления нужно несколько осмысленных реплик.";return
+    }
     autoStatus.textContent="Сохранено: "+data.memories.length;
     for(const entry of data.memories){
       const li=document.createElement("li");
