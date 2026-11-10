@@ -84,25 +84,31 @@ function speak(text, mp3, allowBrowserVoice=true){
   u.onerror=()=>state("idle","Озвучка недоступна");
   synth.speak(u);
 }
-async function request(data, signal){const r=await fetch("/api/chat.php",{method:"POST",signal,credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});const j=await r.json();if(!r.ok)throw new Error((j.error||"Не удалось получить ответ")+(j.finish_reason?" (причина: "+j.finish_reason+")":""));return j}
+async function request(data, signal){const r=await fetch("/api/chat.php",{method:"POST",cache:"no-store",signal,credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});const j=await r.json();if(!r.ok)throw new Error((j.error||"Не удалось получить ответ")+(j.finish_reason?" (причина: "+j.finish_reason+")":""));return j}
 function showPresence(online, label){
   document.getElementById("foxy-presence").dataset.online = String(online);
   const status = document.getElementById("foxy-presence-label");
   if (status.textContent !== label) status.textContent = label;
 }
+let presenceCheck = 0;
 async function checkPresence(){
   if (document.hidden || !navigator.onLine) return;
+  const check = ++presenceCheck;
+  const started = performance.now();
   try {
     const result = await request({action:"status"}, AbortSignal.timeout(5000));
-    showPresence(Boolean(result.ok && result.csrf), result.csrf ? "В сети" : "Нужен вход");
+    if (check !== presenceCheck || !navigator.onLine) return;
+    const online = Boolean(result.ok && result.csrf);
+    showPresence(online, online ? `В сети · ${Math.round(performance.now() - started)} мс` : "Нужен вход");
   } catch (error) {
+    if (check !== presenceCheck) return;
     showPresence(false, error.message === "Сначала нужен родительский вход" ? "Нужен вход" : "Нет связи");
   }
 }
 window.addEventListener("online", checkPresence);
-window.addEventListener("offline", () => showPresence(false, "Нет связи"));
+window.addEventListener("offline", () => { presenceCheck++; showPresence(false, "Нет связи"); });
 document.addEventListener("visibilitychange", checkPresence);
-setInterval(checkPresence, 30000);
+setInterval(checkPresence, 15000);
 if (navigator.onLine) checkPresence();
 else showPresence(false, "Нет связи");
 async function parentLogin(){
