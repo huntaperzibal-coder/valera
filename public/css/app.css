@@ -79,3 +79,9 @@
 
 #foxy-presence[data-online="true"] { color: #24633d; }
 .presence-label { display: block; font-size: 12px; font-weight: 650; }
+
+.speaker-status { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; }
+.speaker-status span { padding: 5px 12px; border-radius: 20px; background: #f6ecdc; font-size: 14px; font-weight: 750; }
+.speaker-status[data-state="listening"] #valera-state { background: #d9eef9; color: #164b68; }
+.speaker-status[data-state="speaking"] #foxy-state { background: #ffdfbf; color: #793809; }
+.speaker-status[data-state="thinking"] #foxy-state { background: #fff0b8; color: #634b13; }
