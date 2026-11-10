@@ -91,7 +91,7 @@ async function respond(heard){
 textForm.addEventListener("submit",e=>{e.preventDefault();const value=textInput.value.trim();if(!value)return;textInput.value="";respond(value)});
 document.getElementById("demo").addEventListener("click",()=>{if(sending)return;greeting=openingText();speak(greeting)});
 listen.addEventListener("click",()=>{if(busy||sending)return;if(!Recognition){state("idle","Браузер не поддерживает распознавание речи");return}if(synth)synth.cancel();const rec=new Recognition();rec.lang="ru-RU";rec.interimResults=false;rec.onstart=()=>{busy=true;state("listening","Я тебя слушаю");bubble.textContent="Я слушаю!"};rec.onresult=e=>respond(e.results[0][0].transcript);rec.onerror=e=>{state("idle",e.error==="not-allowed"?"Разреши микрофон в браузере":"Не расслышал, повтори");bubble.textContent="Попробуем ещё?"};rec.onend=()=>{busy=false;if(fox.dataset.state==="listening")state("idle","Попробуй ещё раз")};try{rec.start()}catch(e){state("idle","Не получилось включить микрофон")}});
-document.getElementById("adult").addEventListener("click",()=>document.getElementById("info").showModal());
+document.getElementById("adult").addEventListener("click",()=>{document.getElementById("info").showModal();loadParentNotes();});
 
 const usageButton=document.getElementById("usage-refresh");
 const formatRub=value=>typeof value==="number" ? value.toLocaleString("ru-RU",{minimumFractionDigits:3,maximumFractionDigits:4})+" ₽" : "—";
@@ -117,7 +117,8 @@ usageButton.addEventListener("click",async()=>{
 });
 
 const memoryNotes=document.getElementById("memory-notes"),memoryStatus=document.getElementById("memory-status");
-document.getElementById("memory-load").addEventListener("click",async()=>{try{if(!(await parentLogin()))return;const r=await request({action:"memory_get"});memoryNotes.value=r.memory||"";memoryStatus.textContent="Память загружена"}catch(e){memoryStatus.textContent=e.message}});
+async function loadParentNotes(){try{memoryStatus.textContent="Загружаем сведения…";if(!(await parentLogin())){memoryStatus.textContent="Для просмотра нужен родительский пароль";return}const r=await request({action:"memory_get"});memoryNotes.value=r.memory||"";memoryStatus.textContent=r.memory?"Сведения сохранены на сервере":"Пока сведений нет — добавь их и нажми «Сохранить»"}catch(e){memoryStatus.textContent=e.message}}
+document.getElementById("memory-load").addEventListener("click",loadParentNotes);
 document.getElementById("memory-save").addEventListener("click",async()=>{try{if(!(await parentLogin()))return;await request({action:"memory_save",csrf,notes:memoryNotes.value});memoryStatus.textContent="Память сохранена"}catch(e){memoryStatus.textContent=e.message}});
 document.getElementById("memory-clear").addEventListener("click",async()=>{if(!confirm("Удалить все воспоминания Фокси?"))return;try{if(!(await parentLogin()))return;await request({action:"memory_save",csrf,notes:""});memoryNotes.value="";memoryStatus.textContent="Память очищена"}catch(e){memoryStatus.textContent=e.message}});
 document.getElementById("voice-choice").addEventListener("change",e=>localStorage.setItem("foxy_voice",e.target.value));
