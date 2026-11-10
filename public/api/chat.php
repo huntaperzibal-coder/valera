@@ -179,7 +179,19 @@ if ($action === 'memory_save') {
 // Automatic memory can be viewed and cleared only by a logged-in adult.
 if ($action === 'memory_list') {
     $db = foxyMemoryDb();
-    echo json_encode(['memories'=>$db ? foxyMemoryRows($db) : [],'available'=>(bool)$db,'diagnostic'=>foxyMemoryLastDiagnostic()], JSON_UNESCAPED_UNICODE); exit;
+    $probe = ['ok'=>false,'status'=>'db_unavailable'];
+    if ($db) {
+        try {
+            $db->beginTransaction();
+            foxyMemoryUpdate($db, [['kind'=>'interest','key'=>'foxy_write_probe','content'=>'Любит проверять работу памяти']]);
+            $db->rollBack();
+            $probe = ['ok'=>true,'status'=>'sqlite_write_ok'];
+        } catch (Throwable $e) {
+            if ($db->inTransaction()) $db->rollBack();
+            $probe = ['ok'=>false,'status'=>foxyMemoryDbError($e)];
+        }
+    }
+    echo json_encode(['memories'=>$db ? foxyMemoryRows($db) : [],'available'=>(bool)$db,'write_probe'=>$probe,'diagnostic'=>foxyMemoryLastDiagnostic()], JSON_UNESCAPED_UNICODE); exit;
 }
 if ($action === 'memory_delete' || $action === 'memory_clear_auto') {
     if (!hash_equals((string)($_SESSION['valera_csrf'] ?? ''), (string)($body['csrf'] ?? ''))) {
