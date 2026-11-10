@@ -65,7 +65,7 @@ async function parentLogin(){
   try{const s=await request({action:"login",password});csrf=s.csrf;state("idle","ИИ подключён, можно поговорить");return true}
   catch(e){state("idle",e.message);bubble.textContent="Нужен родительский вход";return false}
 }
-async function respond(heard){
+async function respond(heard,forceSearch=false){
   heard=String(heard||"").trim();
   if(!heard){state("idle","Напиши или произнеси вопрос");return}
   if(sending)return;
@@ -73,7 +73,8 @@ async function respond(heard){
   try{
     if(!(await parentLogin())){state("idle","Сначала нужен взрослый");return}
     state("thinking","Фокси думает");bubble.textContent="Сейчас подумаю…";
-    const r=await request({action:"chat",csrf,message:heard,history,context:timeContext()});
+    const r=await request({action:"chat",csrf,message:heard,history,context:timeContext(),search:forceSearch});
+    showWebResult(r.web);
     history.push({role:"user",content:heard},{role:"assistant",content:r.reply});
     history=history.slice(-8);
     turnsSinceLearn++;
@@ -159,4 +160,23 @@ document.getElementById("auto-memory-refresh").addEventListener("click",loadAuto
 document.getElementById("auto-memory-clear").addEventListener("click",async()=>{
   if(!confirm("Удалить все автоматические воспоминания Фокси?"))return;
   try{if(!(await parentLogin()))return;await request({action:"memory_clear_auto",csrf});await loadAutoMemories()}catch(e){autoStatus.textContent=e.message}
+});
+
+function showWebResult(web){
+  const el=document.getElementById("web-status"),out=document.getElementById("web-sources");
+  out.replaceChildren();
+  if(!web||!web.attempted){el.textContent="Для этого ответа поиск не требовался";return}
+  if(!web.ok){el.textContent="Поиск не удался. Фокси отвечает без подтверждённых свежих сведений." ;return}
+  el.textContent=web.searched?"Фокси использовал поиск Яндекса":"Поисковый инструмент был доступен, но обращения к выдаче не зафиксировано";
+  (web.sources||[]).forEach(url=>{
+    try{const u=new URL(url);if(u.protocol!=="https:")return;
+      const a=document.createElement("a");a.href=u.href;a.target="_blank";a.rel="noopener noreferrer";a.textContent=u.hostname;out.appendChild(a);
+    }catch(e){}
+  });
+}
+document.getElementById("web-ask").addEventListener("click",()=>{
+  const question=textInput.value.trim();
+  if(!question){state("idle","Напиши вопрос для поиска");textInput.focus();return}
+  textInput.value="";
+  respond(question,true);
 });
