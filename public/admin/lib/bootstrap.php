@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once dirname(__DIR__, 2) . '/lib/foxy_private.php';
+require_once dirname(__DIR__, 2) . '/lib/foxy_compat.php';
 require_once dirname(__DIR__, 2) . '/api/_memory.php';
 
 header('X-Robots-Tag: noindex, nofollow, noarchive');
@@ -30,20 +31,16 @@ if ((is_dir($sessionDir) || @mkdir($sessionDir, 0700, true) || is_dir($sessionDi
     ini_set('session.use_strict_mode', '1');
     session_save_path($sessionDir);
     ini_set('session.gc_maxlifetime', (string) $sessionLifetime);
-    session_set_cookie_params([
-        'lifetime' => $sessionLifetime,
-        'path' => '/admin',
-        'secure' => true,
-        'httponly' => true,
-        'samesite' => 'Strict',
-    ]);
+    foxySessionCookieParams($sessionLifetime, '/admin');
     session_start();
 } else {
     http_response_code(503);
     exit('Сессии админки недоступны. Проверь каталог valera-private/sessions.');
 }
 
-$_SESSION['foxy_admin_csrf'] ??= bin2hex(random_bytes(16));
+if (!isset($_SESSION['foxy_admin_csrf'])) {
+    $_SESSION['foxy_admin_csrf'] = bin2hex(random_bytes(16));
+}
 
 function foxyAdminToken(): string {
     return '<input type="hidden" name="csrf" value="' . foxyEsc($_SESSION['foxy_admin_csrf']) . '">';
@@ -65,7 +62,7 @@ function foxyAdminRequireLogin(): void {
     }
 }
 
-function foxyAdminGo(string $to = './'): never {
+function foxyAdminGo(string $to = './'): void {
     header('Location: ' . $to, true, 303);
     exit;
 }

@@ -31,8 +31,11 @@ function foxyUsageSummary(): array {
     $now = time();
     $day = gmdate('Y-m-d', $now);
     $month = gmdate('Y-m', $now);
-    $empty = static fn () => ['requests' => 0, 'input' => 0, 'output' => 0, 'cached' => 0, 'reasoning' => 0, 'rub' => 0.0];
-    $totals = ['today' => $empty(), 'month' => $empty(), 'all' => $empty()];
+    $totals = [
+        'today' => ['requests' => 0, 'input' => 0, 'output' => 0, 'cached' => 0, 'reasoning' => 0, 'rub' => 0.0],
+        'month' => ['requests' => 0, 'input' => 0, 'output' => 0, 'cached' => 0, 'reasoning' => 0, 'rub' => 0.0],
+        'all' => ['requests' => 0, 'input' => 0, 'output' => 0, 'cached' => 0, 'reasoning' => 0, 'rub' => 0.0],
+    ];
     $last = null;
     $file = foxyLedgerPath();
     if (!is_file($file)) {

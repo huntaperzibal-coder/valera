@@ -1,7 +1,10 @@
 <?php
 declare(strict_types=1);
 
-function foxyBackupCommand(array $command, string $directory, ?array $env = null): string {
+require_once dirname(__DIR__, 2) . '/lib/foxy_compat.php';
+
+function foxyBackupCommand(array $command, string $directory, ?array $env = null): string
+{
     $log = tmpfile();
     if (!$log) {
         throw new RuntimeException('Не удалось открыть журнал операции.');
@@ -12,7 +15,7 @@ function foxyBackupCommand(array $command, string $directory, ?array $env = null
             fclose($pipes[0]);
         }
         if (!is_resource($process) || proc_close($process) !== 0) {
-            throw new RuntimeException('Команда завершилась с ошибкой. Проверь настройки и доступ к хранилищу.');
+            throw new RuntimeException('Команда завершилась с ошибкой.');
         }
         rewind($log);
         return (string) stream_get_contents($log);
@@ -21,7 +24,8 @@ function foxyBackupCommand(array $command, string $directory, ?array $env = null
     }
 }
 
-function foxyRemoveBackupStage(string $dir): void {
+function foxyRemoveBackupStage(string $dir): void
+{
     foreach (new FilesystemIterator($dir) as $entry) {
         $path = $entry->getPathname();
         if ($entry->isDir() && !$entry->isDot()) {
@@ -33,7 +37,8 @@ function foxyRemoveBackupStage(string $dir): void {
     rmdir($dir);
 }
 
-function foxyAddBackupEntry(ZipArchive $zip, string $path, string $name, bool $store = false): void {
+function foxyAddBackupEntry(ZipArchive $zip, string $path, string $name, bool $store = false): void
+{
     if (is_link($path)) {
         return;
     }
@@ -54,11 +59,14 @@ function foxyAddBackupEntry(ZipArchive $zip, string $path, string $name, bool $s
     }
 }
 
-function foxyBackupCredentialsPath(): string {
+/** Read-only: existing server credentials (selectel.json). Never written from админки. */
+function foxyBackupCredentialsPath(): string
+{
     return foxyPrivateDir() . '/selectel.json';
 }
 
-function foxyLoadBackupCredentials(): array {
+function foxyLoadBackupCredentials(): array
+{
     $path = foxyBackupCredentialsPath();
     if (!is_file($path)) {
         return [];
@@ -67,43 +75,45 @@ function foxyLoadBackupCredentials(): array {
     return is_array($data) ? $data : [];
 }
 
-function foxySaveBackupCredentials(array $credentials): void {
-    $dir = foxyPrivateDir();
-    if (count($credentials) !== 3 || in_array('', $credentials, true)) {
-        throw new RuntimeException('Заполни реквизиты Selectel.');
-    }
-    $tmp = tempnam($dir, '.selectel-');
-    if ($tmp === false) {
-        throw new RuntimeException('Не удалось создать файл реквизитов.');
-    }
-    try {
-        $payload = json_encode($credentials, JSON_THROW_ON_ERROR);
-        if (!chmod($tmp, 0600) || file_put_contents($tmp, $payload, LOCK_EX) === false || !rename($tmp, foxyBackupCredentialsPath())) {
-            throw new RuntimeException('Не удалось сохранить реквизиты.');
-        }
-        @chmod(foxyBackupCredentialsPath(), 0600);
-    } finally {
-        if (is_file($tmp)) {
-            @unlink($tmp);
-        }
-    }
+/** Use env exactly as on server — no hardcoded repository override. */
+function foxyResticEnv(array $credentials): array
+{
+    return $credentials;
 }
 
-function foxyResticEnv(array $credentials): array {
-    return $credentials + [
-        'AWS_DEFAULT_REGION' => 'ru-3',
-        'RESTIC_REPOSITORY' => 's3:https://s3.ru-3.storage.selcloud.ru/hunta-backups/valera/',
-    ];
+function foxyBackupCredentialsReady(array $credentials): bool
+{
+    foreach (['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'RESTIC_PASSWORD', 'RESTIC_REPOSITORY'] as $key) {
+        if (empty($credentials[$key])) {
+            return false;
+        }
+    }
+    return true;
 }
 
-/** List recent restic snapshots (read-only). */
-function foxyBackupSnapshots(array $credentials): array {
+/** Optional status file written by server cron (read-only). */
+function foxyBackupCronStatus(): ?array
+{
+    $path = foxyPrivateDir() . '/backup-last.json';
+    if (!is_file($path)) {
+        return null;
+    }
+    $data = json_decode((string) file_get_contents($path), true);
+    return is_array($data) ? $data : null;
+}
+
+/** List recent restic snapshots (read-only, existing restic + selectel.json). */
+function foxyBackupSnapshots(array $credentials): array
+{
+    if (!foxyBackupCredentialsReady($credentials)) {
+        return ['ok' => false, 'error' => 'На сервере нет полного selectel.json (ключи и RESTIC_REPOSITORY).'];
+    }
     $restic = foxyPrivateDir() . '/restic';
     if (!is_executable($restic)) {
         return ['ok' => false, 'error' => 'restic не найден в valera-private/restic'];
     }
     try {
-        $log = foxyBackupCommand([$restic, 'snapshots', '--json'], foxyPrivateDir(), foxyResticEnv($credentials));
+        $log = foxyBackupCommand([$restic, '--no-cache', 'snapshots', '--json'], foxyPrivateDir(), foxyResticEnv($credentials));
         $decoded = json_decode($log, true);
         if (!is_array($decoded)) {
             return ['ok' => false, 'error' => 'Не удалось прочитать список снимков'];
@@ -114,7 +124,8 @@ function foxyBackupSnapshots(array $credentials): array {
     }
 }
 
-function foxySqliteIntegrity(string $sqlitePath): ?string {
+function foxySqliteIntegrity(string $sqlitePath): ?string
+{
     if (!is_file($sqlitePath)) {
         return 'Файл базы не найден.';
     }

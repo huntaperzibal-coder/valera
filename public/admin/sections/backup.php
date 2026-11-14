@@ -2,34 +2,26 @@
 declare(strict_types=1);
 
 $credentials = foxyLoadBackupCredentials();
-$snapshots = $credentials !== [] ? foxyBackupSnapshots($credentials) : ['ok' => false, 'error' => 'Реквизиты Selectel не сохранены'];
-$status = $_SESSION['backup_status'] ?? '';
-$statusOk = !empty($_SESSION['backup_ok']);
-unset($_SESSION['backup_status'], $_SESSION['backup_ok']);
+$credReady = foxyBackupCredentialsReady($credentials);
+$snapshots = $credReady ? foxyBackupSnapshots($credentials) : ['ok' => false, 'error' => 'Ежедневные копии и restic уже настроены на сервере; реквизиты не отображаются и из админки не меняются.'];
+$cronStatus = foxyBackupCronStatus();
 $sqlitePath = foxyPrivateDir() . '/foxy-memory.sqlite';
-$integrity = is_file($sqlitePath) ? foxySqliteIntegrity($sqlitePath) : 'Файл базы не найден (это нормально до первой записи).';
+$integrity = is_file($sqlitePath) ? foxySqliteIntegrity($sqlitePath) : null;
 
 echo '<div class="columns" id="backup">';
-echo '<section class="card"><h2>Синхронизация с Selectel</h2>';
-if ($status !== '') {
-    $class = $statusOk ? '' : ' error';
-    echo '<p class="orda-notice' . $class . '" role="status">' . foxyEsc($status) . '</p>';
+echo '<section class="card"><h2>Selectel (только просмотр)</h2>';
+echo '<p>На Masterhost уже настроено резервное копирование в Selectel через restic. Админка <strong>не создаёт</strong> второй репозиторий, <strong>не записывает</strong> <code>selectel.json</code> и <strong>не запускает</strong> полный restic-backup — только показывает снимки по существующим настройкам сервера.</p>';
+if (is_array($cronStatus)) {
+    $when = isset($cronStatus['at']) ? (string) $cronStatus['at'] : '—';
+    $msg = isset($cronStatus['message']) ? (string) $cronStatus['message'] : (isset($cronStatus['status']) ? (string) $cronStatus['status'] : 'Выполнено');
+    echo '<p class="orda-notice" role="status">Последний cron: ' . foxyEsc($when) . ' — ' . foxyEsc($msg) . '</p>';
 }
-if ($credentials !== []) {
-    echo '<form method="post">' . foxyAdminToken() . '<div class="orda-buttons start"><button class="btn-main" name="action" value="backup_selectel" type="submit">Сохранить в Selectel сейчас</button></div></form>';
-}
-echo '<details' . ($credentials === [] ? ' open' : '') . '><summary>Реквизиты Selectel</summary>';
-echo '<form method="post">' . foxyAdminToken();
-echo '<label>Ключ доступа Selectel<input type="password" name="access_key" required autocomplete="off"></label>';
-echo '<label>Секретный ключ Selectel<input type="password" name="secret_key" required autocomplete="off"></label>';
-echo '<label>Пароль restic<input type="password" name="backup_password" required autocomplete="off"></label>';
-echo '<label class="check"><input type="checkbox" name="initialize_repository" value="1"> Создать репозиторий при первой настройке</label>';
-echo '<div class="orda-buttons start"><button class="btn-main" name="action" value="backup_selectel_save" type="submit">Сохранить в Selectel и запомнить реквизиты</button></div></form></details>';
 if (!empty($snapshots['ok']) && !empty($snapshots['snapshots'])) {
     echo '<h3>Последние снимки</h3><table class="data"><thead><tr><th>ID</th><th>Время</th><th>Теги</th></tr></thead><tbody>';
     foreach (array_reverse($snapshots['snapshots']) as $snap) {
         $time = isset($snap['time']) ? gmdate('Y-m-d H:i', strtotime((string) $snap['time'])) . ' UTC' : '—';
-        echo '<tr><td><code>' . foxyEsc(substr((string) ($snap['id'] ?? ''), 0, 8)) . '</code></td><td>' . foxyEsc($time) . '</td><td>' . foxyEsc(implode(', ', $snap['tags'] ?? [])) . '</td></tr>';
+        $tags = isset($snap['tags']) && is_array($snap['tags']) ? implode(', ', $snap['tags']) : '';
+        echo '<tr><td><code>' . foxyEsc(substr((string) ($snap['id'] ?? ''), 0, 8)) . '</code></td><td>' . foxyEsc($time) . '</td><td>' . foxyEsc($tags) . '</td></tr>';
     }
     echo '</tbody></table>';
 } elseif (!empty($snapshots['error'])) {
@@ -38,16 +30,18 @@ if (!empty($snapshots['ok']) && !empty($snapshots['snapshots'])) {
 echo '</section>';
 
 echo '<section class="card"><h2>Резервная копия на компьютер</h2>';
-echo '<p>Каталог сайта, valera-private (конфиг, память, SQLite-копия), без перезаписи живой базы.</p>';
+echo '<p>Локальный ZIP: каталог сайта и копия <code>valera-private</code> (SQLite через VACUUM INTO или безопасное копирование, без перезаписи живой базы).</p>';
 echo '<form method="post" data-backup-download action="">' . foxyAdminToken();
 echo '<input type="hidden" name="action" value="backup_download">';
 echo '<div class="orda-buttons start"><button class="btn-secondary" type="submit">Скачать резервную копию</button></div>';
 echo '<p role="status" hidden></p></form>';
 echo '<h3>Проверка SQLite</h3>';
-if ($integrity === null) {
+if (!is_file($sqlitePath)) {
+    echo '<p>Пока нет файла автопамяти — это нормально до первой записи.</p>';
+} elseif ($integrity === null) {
     echo '<p class="orda-notice" role="status">integrity_check: ok</p>';
 } else {
     echo '<p class="orda-notice error">' . foxyEsc($integrity) . '</p>';
 }
-echo '<p>Восстановление: распакуй архив вручную, сравни файлы и только после проверки замени на сервере. Автоматическое восстановление из админки не выполняется.</p></section>';
+echo '<p>Восстановление на сервер — вручную после проверки архива; автоматическое восстановление из админки отключено.</p></section>';
 echo '</div><script defer src="admin.js?v=1"></script>';

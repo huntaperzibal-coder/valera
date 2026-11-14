@@ -4,6 +4,7 @@ declare(strict_types=1);
 require __DIR__ . '/lib/bootstrap.php';
 require __DIR__ . '/lib/backup.php';
 require __DIR__ . '/lib/layout.php';
+require_once dirname(__DIR__) . '/lib/foxy_compat.php';
 
 $allowedSections = ['home', 'memory', 'ai', 'voice', 'github', 'backup', 'security'];
 $section = (string) ($_GET['section'] ?? 'home');
@@ -173,101 +174,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 session_destroy();
                 foxyAdminGo('./');
             }
-            if ($action === 'backup_selectel' || $action === 'backup_selectel_save') {
-                $credentials = foxyLoadBackupCredentials();
-                $new = isset($_POST['access_key']);
-                if ($new) {
-                    $credentials = [
-                        'AWS_ACCESS_KEY_ID' => trim((string) $_POST['access_key']),
-                        'AWS_SECRET_ACCESS_KEY' => (string) ($_POST['secret_key'] ?? ''),
-                        'RESTIC_PASSWORD' => (string) ($_POST['backup_password'] ?? ''),
-                    ];
-                }
-                if (count($credentials) !== 3 || in_array('', $credentials, true)) {
-                    throw new RuntimeException('Заполни реквизиты Selectel.');
-                }
-                $restic = foxyPrivateDir() . '/restic';
-                if (!is_executable($restic)) {
-                    throw new RuntimeException('В valera-private нужен исполняемый файл restic.');
-                }
-                $env = foxyResticEnv($credentials);
-                try {
-                    foxyBackupCommand([$restic, '--no-cache', 'cat', 'config'], foxyPrivateDir(), $env);
-                } catch (RuntimeException $e) {
-                    if (!$new || empty($_POST['initialize_repository'])) {
-                        throw $e;
-                    }
-                    foxyBackupCommand([$restic, '--no-cache', 'init'], foxyPrivateDir(), $env);
-                }
-                if ($new) {
-                    foxySaveBackupCredentials($credentials);
-                }
-                $stage = foxyPrivateDir() . '/backups/.stage-' . bin2hex(random_bytes(12));
-                if (!is_dir($stage) && !mkdir($stage, 0700, true)) {
-                    throw new RuntimeException('Не удалось создать временную папку.');
-                }
-                $copy = $stage;
-                $log = '';
-                try {
-                    $private = foxyPrivateDir();
-                    $siteRoot = dirname(__DIR__);
-                    $repoRoot = dirname($siteRoot, 2) . '/valera-repo';
-                    if (!is_dir($repoRoot)) {
-                        $repoRoot = dirname($siteRoot, 2);
-                    }
-                    foreach (['config.php', 'admin-settings.json', 'memory.json', 'memory-status.json', 'usage.jsonl'] as $file) {
-                        $from = $private . '/' . $file;
-                        if (is_file($from)) {
-                            if (!copy($from, $copy . '/' . $file)) {
-                                throw new RuntimeException('Не удалось скопировать ' . $file);
-                            }
-                            chmod($copy . '/' . $file, 0600);
-                        }
-                    }
-                    $sqliteLive = $private . '/foxy-memory.sqlite';
-                    if (is_file($sqliteLive)) {
-                        $sqliteCopy = $copy . '/foxy-memory.sqlite';
-                        $pdo = new PDO('sqlite:' . $sqliteLive);
-                        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-                        $pdo->exec('VACUUM INTO ' . $pdo->quote($sqliteCopy));
-                        chmod($sqliteCopy, 0600);
-                        $check = foxySqliteIntegrity($sqliteCopy);
-                        if ($check !== null) {
-                            throw new RuntimeException('Копия SQLite не прошла проверку: ' . $check);
-                        }
-                    }
-                    $codeArchive = $copy . '/site-code.tar.gz';
-                    $tarPaths = ['public', 'tools', 'README.md', '.gitignore'];
-                    $tarList = [];
-                    foreach ($tarPaths as $entry) {
-                        $full = $repoRoot . '/' . $entry;
-                        if (file_exists($full)) {
-                            $tarList[] = $entry;
-                        }
-                    }
-                    if ($tarList !== []) {
-                        foxyBackupCommand(array_merge(['tar', '-czf', $codeArchive], $tarList), $repoRoot);
-                    }
-                    $log = foxyBackupCommand(
-                        [$restic, '--no-cache', '--json', 'backup', '--tag', 'valera', '.'],
-                        $copy,
-                        $env
-                    );
-                } finally {
-                    if (is_dir($copy)) {
-                        foxyRemoveBackupStage($copy);
-                    }
-                }
-                foreach (explode("\n", $log) as $line) {
-                    $event = json_decode($line, true);
-                    if (($event['message_type'] ?? '') === 'summary' && !empty($event['snapshot_id'])) {
-                        $_SESSION['backup_status'] = 'Снимок ' . substr($event['snapshot_id'], 0, 8) . ' сохранён в Selectel.';
-                        $_SESSION['backup_ok'] = true;
-                        foxyAdminGo('?section=backup');
-                    }
-                }
-                throw new RuntimeException('Selectel не вернул идентификатор снимка.');
-            }
             if ($action === 'backup_download') {
                 if (!class_exists(ZipArchive::class)) {
                     throw new RuntimeException('На сервере нужно расширение PHP zip.');
@@ -288,10 +194,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $sqliteLive = $private . '/foxy-memory.sqlite';
                     if (is_file($sqliteLive)) {
                         $sqliteCopy = $stage . '/foxy-memory.sqlite';
-                        $pdo = new PDO('sqlite:' . $sqliteLive);
-                        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-                        $pdo->exec('VACUUM INTO ' . $pdo->quote($sqliteCopy));
-                        chmod($sqliteCopy, 0600);
+                        foxySqliteBackupCopy($sqliteLive, $sqliteCopy);
                         foxyAddBackupEntry($zip, $sqliteCopy, 'valera-private/foxy-memory.sqlite');
                     }
                     foreach (['config.php', 'admin-settings.json', 'memory.json', 'memory-status.json', 'usage.jsonl'] as $file) {
@@ -323,7 +226,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'name' => 'foxy-valera-' . $date->format('Y-m-d_H-i-s') . '.zip',
                 ];
                 header('Content-Type: application/json; charset=utf-8');
-                echo json_encode(['url' => '?section=backup&backup_download=' . $token], JSON_THROW_ON_ERROR);
+                $payload = json_encode(['url' => '?section=backup&backup_download=' . $token]);
+                if ($payload === false) {
+                    throw new RuntimeException('Не удалось подготовить ответ.');
+                }
+                echo $payload;
                 exit;
             }
         } catch (Throwable $e) {
@@ -334,9 +241,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 echo json_encode(['error' => $message], JSON_UNESCAPED_UNICODE);
                 exit;
             }
-            $_SESSION['backup_status'] = $e instanceof RuntimeException ? $e->getMessage() : 'Ошибка операции.';
-            $_SESSION['backup_ok'] = false;
-            foxyAdminGo('?section=' . ($section === 'backup' ? 'backup' : $section));
+            $_SESSION['flash'] = $e instanceof RuntimeException ? $e->getMessage() : 'Ошибка операции.';
+            foxyAdminGo('?section=' . $section);
         }
     }
 }
