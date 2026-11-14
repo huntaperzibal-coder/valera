@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+define('FOXY_ADMIN_SESSION', 7 * 86400);
+
 require_once dirname(__DIR__, 2) . '/lib/foxy_private.php';
 require_once dirname(__DIR__, 2) . '/lib/foxy_compat.php';
 require_once dirname(__DIR__, 2) . '/api/_memory.php';
