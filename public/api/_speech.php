@@ -1,12 +1,21 @@
 <?php
+require_once dirname(__DIR__) . '/lib/foxy_private.php';
+
 function foxySynthesize(string $reply, array $config): ?string {
+    $settings = foxyLoadSettings();
+    $speech = $settings['speech'] ?? foxyDefaultSettings()['speech'];
     $text = preg_replace('~https?://\S+~iu', '', $reply);
     $text = trim(str_replace(['<', '>', '[', ']', '*', '+'], '', $text));
     if ($text === '') return null;
     $text = preg_replace('/([.!?…])\s+(?=\p{Lu})/u', '$1 sil<[450]> ', $text);
     $payload = json_encode([
         'text' => $text,
-        'hints' => [['voice'=>'marina'], ['role'=>'friendly'], ['speed'=>'0.99'], ['pitchShift'=>'-100']],
+        'hints' => [
+            ['voice' => (string) ($speech['voice'] ?? 'marina')],
+            ['role' => (string) ($speech['role'] ?? 'friendly')],
+            ['speed' => (string) ($speech['speed'] ?? '0.99')],
+            ['pitchShift' => (string) ($speech['pitchShift'] ?? '-100')],
+        ],
         'outputAudioSpec' => ['containerAudio'=>['containerAudioType'=>'MP3']],
         'unsafeMode' => true,
     ], JSON_UNESCAPED_UNICODE);
