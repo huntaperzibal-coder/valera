@@ -6,7 +6,7 @@ function foxySynthesize(string $reply, array $config): ?string {
     $text = preg_replace('/([.!?…])\s+(?=\p{Lu})/u', '$1 sil<[450]> ', $text);
     $payload = json_encode([
         'text' => $text,
-        'hints' => [['voice'=>'marina'], ['role'=>'friendly'], ['speed'=>'0.99'], ['pitchShift'=>'-100']],
+        'hints' => [['voice'=>'marina'], ['role'=>'friendly'], ['speed'=>'0.99'], ['pitchShift'=>'65']],
         'outputAudioSpec' => ['containerAudio'=>['containerAudioType'=>'MP3']],
         'unsafeMode' => true,
     ], JSON_UNESCAPED_UNICODE);
