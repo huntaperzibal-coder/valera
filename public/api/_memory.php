@@ -2,10 +2,8 @@
 declare(strict_types=1);
 
 /* Auto-memory. Only compact non-sensitive interests and story milestones are stored. */
-function foxyMemoryDb(): ?PDO {
+function foxyMemoryDb(string $folder): ?PDO {
     if (!extension_loaded('pdo_sqlite')) return null;
-    $folder = dirname(__DIR__, 3) . '/valera-private';
-    if (!is_dir($folder)) return null;
     try {
         $db = new PDO('sqlite:' . $folder . '/foxy-memory.sqlite');
         $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);

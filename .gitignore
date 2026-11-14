@@ -5,3 +5,7 @@ storage/
 *.sqlite
 *.db
 config/local.php
+valera-private/
+config.php
+*.sqlite-*
+*.db-*
