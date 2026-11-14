@@ -24,7 +24,6 @@ $configReady = is_array($config)
     && !empty($config['folder_id'])
     && !empty($config['parent_password_hash']);
 
-const FOXY_ADMIN_SESSION = 7 * 86400;
 $sessionLifetime = FOXY_ADMIN_SESSION;
 $privateDir = foxyPrivateDir();
 $sessionDir = $privateDir . '/sessions';

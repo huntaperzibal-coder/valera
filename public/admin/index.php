@@ -4,7 +4,6 @@ declare(strict_types=1);
 require __DIR__ . '/lib/bootstrap.php';
 require __DIR__ . '/lib/backup.php';
 require __DIR__ . '/lib/layout.php';
-require_once dirname(__DIR__) . '/lib/foxy_compat.php';
 
 $allowedSections = ['home', 'memory', 'ai', 'voice', 'github', 'backup', 'security'];
 $section = (string) ($_GET['section'] ?? 'home');
@@ -12,31 +11,8 @@ if (!in_array($section, $allowedSections, true)) {
     $section = 'home';
 }
 
-if (isset($_GET['backup_download']) && $_SERVER['REQUEST_METHOD'] === 'GET' && foxyAdminLoggedIn()) {
-    $download = $_SESSION['local_backup'] ?? null;
-    if (!$download || !hash_equals($download['token'], (string) $_GET['backup_download'])) {
-        http_response_code(404);
-        exit('Архив недоступен. Подготовь новую копию.');
-    }
-    unset($_SESSION['local_backup']);
-    session_write_close();
-    $archive = $download['path'];
-    $file = fopen($archive, 'rb');
-    if ($file === false) {
-        http_response_code(404);
-        exit('Архив недоступен.');
-    }
-    if (is_file($archive)) {
-        unlink($archive);
-    }
-    if (is_dir($download['stage'] ?? '')) {
-        foxyRemoveBackupStage($download['stage']);
-    }
-    header('Content-Type: application/zip');
-    header('Content-Disposition: attachment; filename="' . $download['name'] . '"');
-    header('Content-Length: ' . (string) fstat($file)['size']);
-    fpassthru($file);
-    fclose($file);
+if (isset($_GET['backup_download']) && ($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
+    header('Location: backup-download.php?download=' . rawurlencode((string) $_GET['backup_download']), true, 302);
     exit;
 }
 
@@ -174,73 +150,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 session_destroy();
                 foxyAdminGo('./');
             }
-            if ($action === 'backup_download') {
-                if (!class_exists(ZipArchive::class)) {
-                    throw new RuntimeException('На сервере нужно расширение PHP zip.');
-                }
-                $stage = foxyPrivateDir() . '/backups/.stage-' . bin2hex(random_bytes(12));
-                if (!is_dir($stage) && !mkdir($stage, 0700, true)) {
-                    throw new RuntimeException('Не удалось создать временную папку.');
-                }
-                $archive = $stage . '/foxy-valera.zip';
-                $zip = new ZipArchive();
-                if ($zip->open($archive, ZipArchive::CREATE | ZipArchive::EXCL) !== true) {
-                    throw new RuntimeException('Не удалось создать ZIP.');
-                }
-                try {
-                    $siteRoot = dirname(__DIR__);
-                    foxyAddBackupEntry($zip, $siteRoot, 'public_html');
-                    $private = foxyPrivateDir();
-                    $sqliteLive = $private . '/foxy-memory.sqlite';
-                    if (is_file($sqliteLive)) {
-                        $sqliteCopy = $stage . '/foxy-memory.sqlite';
-                        foxySqliteBackupCopy($sqliteLive, $sqliteCopy);
-                        foxyAddBackupEntry($zip, $sqliteCopy, 'valera-private/foxy-memory.sqlite');
-                    }
-                    foreach (['config.php', 'admin-settings.json', 'memory.json', 'memory-status.json', 'usage.jsonl'] as $file) {
-                        $path = $private . '/' . $file;
-                        if (is_file($path)) {
-                            foxyAddBackupEntry($zip, $path, 'valera-private/' . $file);
-                        }
-                    }
-                    $repoRoot = dirname($siteRoot, 2) . '/valera-repo';
-                    if (is_dir($repoRoot . '/tools')) {
-                        foxyAddBackupEntry($zip, $repoRoot . '/tools', 'valera-repo/tools');
-                    }
-                    if (!$zip->close()) {
-                        throw new RuntimeException('Не удалось записать ZIP.');
-                    }
-                } catch (Throwable $e) {
-                    $zip->close();
-                    if (is_file($archive)) {
-                        unlink($archive);
-                    }
-                    throw $e;
-                }
-                $token = bin2hex(random_bytes(24));
-                $date = new DateTimeImmutable('now', new DateTimeZone('Asia/Novosibirsk'));
-                $_SESSION['local_backup'] = [
-                    'token' => $token,
-                    'path' => $archive,
-                    'stage' => $stage,
-                    'name' => 'foxy-valera-' . $date->format('Y-m-d_H-i-s') . '.zip',
-                ];
-                header('Content-Type: application/json; charset=utf-8');
-                $payload = json_encode(['url' => '?section=backup&backup_download=' . $token]);
-                if ($payload === false) {
-                    throw new RuntimeException('Не удалось подготовить ответ.');
-                }
-                echo $payload;
-                exit;
-            }
         } catch (Throwable $e) {
-            if ($action === 'backup_download') {
-                http_response_code(500);
-                header('Content-Type: application/json; charset=utf-8');
-                $message = $e instanceof RuntimeException ? $e->getMessage() : 'Не удалось подготовить резервную копию.';
-                echo json_encode(['error' => $message], JSON_UNESCAPED_UNICODE);
-                exit;
-            }
             $_SESSION['flash'] = $e instanceof RuntimeException ? $e->getMessage() : 'Ошибка операции.';
             foxyAdminGo('?section=' . $section);
         }

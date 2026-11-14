@@ -31,7 +31,7 @@ echo '</section>';
 
 echo '<section class="card"><h2>Резервная копия на компьютер</h2>';
 echo '<p>Локальный ZIP: каталог сайта и копия <code>valera-private</code> (SQLite через VACUUM INTO или безопасное копирование, без перезаписи живой базы).</p>';
-echo '<form method="post" data-backup-download action="">' . foxyAdminToken();
+echo '<form method="post" data-backup-download action="backup-download.php">' . foxyAdminToken();
 echo '<input type="hidden" name="action" value="backup_download">';
 echo '<div class="orda-buttons start"><button class="btn-secondary" type="submit">Скачать резервную копию</button></div>';
 echo '<p role="status" hidden></p></form>';
@@ -44,4 +44,4 @@ if (!is_file($sqlitePath)) {
     echo '<p class="orda-notice error">' . foxyEsc($integrity) . '</p>';
 }
 echo '<p>Восстановление на сервер — вручную после проверки архива; автоматическое восстановление из админки отключено.</p></section>';
-echo '</div><script defer src="admin.js?v=1"></script>';
+echo '</div><script defer src="admin.js?v=2"></script>';

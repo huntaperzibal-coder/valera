@@ -37,22 +37,114 @@ function foxyRemoveBackupStage(string $dir): void
     rmdir($dir);
 }
 
+function foxyBackupJson(array $payload, int $code = 200): void
+{
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    http_response_code($code);
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store');
+    $out = json_encode($payload, JSON_UNESCAPED_UNICODE);
+    if ($out === false) {
+        $out = '{"error":"Не удалось сформировать ответ"}';
+    }
+    echo $out;
+    exit;
+}
+
+/** @return array{stage:string,archive:string,name:string} */
+function foxyBuildLocalBackupZip(): array
+{
+    if (!class_exists('ZipArchive')) {
+        throw new RuntimeException('На сервере нужно расширение PHP zip.');
+    }
+    $private = foxyPrivateDir();
+    $backupRoot = $private . '/backups';
+    if (!is_dir($backupRoot) && !@mkdir($backupRoot, 0700, true) && !is_dir($backupRoot)) {
+        throw new RuntimeException('Не удалось создать каталог valera-private/backups.');
+    }
+    $stage = $backupRoot . '/.stage-' . bin2hex(random_bytes(12));
+    if (!@mkdir($stage, 0700, true) && !is_dir($stage)) {
+        throw new RuntimeException('Не удалось создать временную папку.');
+    }
+    $archive = $stage . '/foxy-valera.zip';
+    $zip = new ZipArchive();
+    $opened = $zip->open($archive, ZipArchive::CREATE | ZipArchive::EXCL);
+    if ($opened !== true) {
+        foxyRemoveBackupStage($stage);
+        throw new RuntimeException('Не удалось создать ZIP-архив.');
+    }
+    try {
+        $siteRoot = dirname(__DIR__, 2);
+        foxyAddBackupEntry($zip, $siteRoot, 'public_html');
+        $sqliteLive = $private . '/foxy-memory.sqlite';
+        if (is_file($sqliteLive)) {
+            $sqliteCopy = $stage . '/foxy-memory.sqlite';
+            foxySqliteBackupCopy($sqliteLive, $sqliteCopy);
+            if (!$zip->addFile($sqliteCopy, 'valera-private/foxy-memory.sqlite')) {
+                throw new RuntimeException('Не удалось добавить копию SQLite в архив.');
+            }
+        }
+        foreach (['config.php', 'admin-settings.json', 'memory.json', 'memory-status.json', 'usage.jsonl'] as $file) {
+            $path = $private . '/' . $file;
+            if (is_file($path) && !$zip->addFile($path, 'valera-private/' . $file)) {
+                throw new RuntimeException('Не удалось добавить ' . $file . ' в архив.');
+            }
+        }
+        $repoRoot = dirname($siteRoot, 2) . '/valera-repo';
+        if (is_dir($repoRoot . '/tools')) {
+            foxyAddBackupEntry($zip, $repoRoot . '/tools', 'valera-repo/tools');
+        }
+        if (!$zip->close()) {
+            throw new RuntimeException('Не удалось записать ZIP-архив.');
+        }
+    } catch (Throwable $e) {
+        $zip->close();
+        if (is_file($archive)) {
+            @unlink($archive);
+        }
+        foxyRemoveBackupStage($stage);
+        if ($e instanceof RuntimeException) {
+            throw $e;
+        }
+        throw new RuntimeException('Не удалось собрать архив.', 0, $e);
+    }
+    $date = new DateTimeImmutable('now', new DateTimeZone('Asia/Novosibirsk'));
+    return [
+        'stage' => $stage,
+        'archive' => $archive,
+        'name' => 'foxy-valera-' . $date->format('Y-m-d_H-i-s') . '.zip',
+    ];
+}
+
 function foxyAddBackupEntry(ZipArchive $zip, string $path, string $name, bool $store = false): void
 {
     if (is_link($path)) {
+        return;
+    }
+    $base = basename($path);
+    if ($base === 'backups' || strpos($base, '.stage-') === 0) {
         return;
     }
     if (is_dir($path)) {
         if (!$zip->addEmptyDir($name)) {
             throw new RuntimeException('Не удалось добавить папку в ZIP.');
         }
-        foreach (new FilesystemIterator($path) as $entry) {
+        foreach (new FilesystemIterator($path, FilesystemIterator::SKIP_DOTS) as $entry) {
             foxyAddBackupEntry($zip, $entry->getPathname(), $name . '/' . $entry->getFilename(), $store);
         }
         return;
     }
-    if (!is_file($path) || !$zip->addFile($path, $name)) {
-        throw new RuntimeException('Не удалось добавить файл в ZIP.');
+    if (!is_file($path)) {
+        return;
+    }
+    $size = filesize($path);
+    if ($size === false || $size > 80 * 1024 * 1024) {
+        return;
+    }
+    if (!$zip->addFile($path, $name)) {
+        throw new RuntimeException('Не удалось добавить файл в ZIP: ' . $name);
     }
     if ($store && !$zip->setCompressionName($name, ZipArchive::CM_STORE)) {
         throw new RuntimeException('Не удалось настроить ZIP.');
