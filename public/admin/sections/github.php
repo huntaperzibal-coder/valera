@@ -6,7 +6,7 @@ echo '<div class="command-panel">';
 $beget = basename(dirname(__DIR__, 2)) === 'public_html';
 $host = $beget ? 'Beget' : 'Masterhost';
 $login = $beget ? 'ssh altaikemp_foxy@altaikemp.beget.tech' : 'ssh u551741@u551741.masterhost.ru';
-$sync = $beget ? 'bash /home/a/altaikemp/hunta.su/valera-repo/tools/valera-sync.sh /home/a/altaikemp/hunta.su/public_html' : '~/valera-sync.sh';
+$sync = '~/valera-sync.sh';
 
 echo '<div class="command-row"><div><strong>Вход на сервер (' . foxyEsc($host) . ')</strong><code>' . foxyEsc($login) . '</code></div>';
 echo '<button class="btn-secondary" type="button" data-copy="' . foxyEsc($login) . '">Копировать вход</button></div>';
