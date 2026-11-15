@@ -89,7 +89,7 @@ function foxyBuildLocalBackupZip(): array
                 throw new RuntimeException('Не удалось добавить копию SQLite в архив.');
             }
         }
-        foreach (['config.php', 'admin-settings.json', 'memory.json', 'memory-status.json', 'usage.jsonl'] as $file) {
+        foreach (['config.php', 'admin-settings.json', 'memory.json', 'memory-status.json', 'usage.jsonl', 'valera-sync.sh'] as $file) {
             $path = $private . '/' . $file;
             if (is_file($path) && !$zip->addFile($path, 'valera-private/' . $file)) {
                 throw new RuntimeException('Не удалось добавить ' . $file . ' в архив.');
