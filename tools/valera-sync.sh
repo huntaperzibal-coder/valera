@@ -5,10 +5,15 @@ REPO="https://github.com/huntaperzibal-coder/valera.git"
 LEGACY_REPO="git@github.com:huntaperzibal-coder/valera.git"
 BRANCH="main"
 SOURCE="$HOME/valera-repo"
-WEB_ROOT="${1:-$HOME/hunta.su/www}"
+BEGET_ROOT=/home/a/altaikemp/hunta.su/public_html
+DEFAULT_WEB_ROOT="$HOME/hunta.su/www"
+if [[ "$HOME" == "$BEGET_ROOT" ]]; then
+  DEFAULT_WEB_ROOT="$BEGET_ROOT"
+fi
+WEB_ROOT="${1:-$DEFAULT_WEB_ROOT}"
 
 case "$WEB_ROOT" in
-  /home/a/altaikemp/hunta.su/public_html) SOURCE="/home/a/altaikemp/hunta.su/valera-repo" ;;
+  "$BEGET_ROOT") SOURCE="${BEGET_ROOT%/*}/valera-repo" ;;
   "$HOME/hunta.su/www") ;;
   *) echo "Укажите каталог сайта hunta.su"; exit 1 ;;
 esac
@@ -33,7 +38,7 @@ git merge --ff-only FETCH_HEAD
 stage="$(mktemp -d)"
 trap 'rm -rf -- "$stage"' EXIT
 git archive HEAD public/ | tar -x -C "$stage"
-rsync -av --delay-updates --exclude='.git/' --exclude='.env*' --exclude='*.db' --exclude='*.sqlite*' \
+rsync -rcv --delay-updates --exclude='.git/' --exclude='.env*' --exclude='*.db' --exclude='*.sqlite*' \
   --exclude='storage/' --exclude='config/' --exclude='config.php' --exclude='valera-private/' \
   "$stage/public/" "$WEB_ROOT/"
 echo "Готово: $(git rev-parse --short HEAD) → $WEB_ROOT"
