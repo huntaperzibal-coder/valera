@@ -260,6 +260,11 @@ if ($action === 'greeting') {
         http_response_code(403);
         echo json_encode(['error'=>'Доступ запрещён'], JSON_UNESCAPED_UNICODE); exit;
     }
+    $reply = $body['greeting'] ?? 'Привет! Я Фокси. Рада тебя видеть! Что расскажешь?';
+    if (!is_string($reply) || trim($reply) === '' || mb_strlen($reply, 'UTF-8') > 200) {
+        http_response_code(400);
+        echo json_encode(['error'=>'Неверное приветствие'], JSON_UNESCAPED_UNICODE); exit;
+    }
     if (time() - ($_SESSION['foxy_greeting_at'] ?? 0) < 15) {
         http_response_code(429);
         echo json_encode(['error'=>'Попробуй чуть позже'], JSON_UNESCAPED_UNICODE); exit;
@@ -267,7 +272,6 @@ if ($action === 'greeting') {
     $_SESSION['foxy_greeting_at'] = time();
     session_write_close();
     require_once __DIR__ . '/_speech.php';
-    $reply = 'Привет! Я Фокси. Рада тебя видеть! Что расскажешь?';
     echo json_encode(['reply'=>$reply, 'audio_mp3'=>foxySynthesize($reply, $config)], JSON_UNESCAPED_UNICODE); exit;
 }
 if ($action !== 'chat' || !hash_equals((string)($_SESSION['valera_csrf'] ?? ''), (string)($body['csrf'] ?? ''))) {

@@ -20,7 +20,7 @@ function openingText(){
   const list=greetings[t.dayPart],chosen=list[Math.floor(Math.random()*list.length)];
   return Math.random()<0.15 ? chosen+" "+extras[t.season] : chosen;
 }
-let greeting=openingText();
+const greeting=openingText();
 bubble.textContent=greeting;
 
 function state(s,t,showMessage=false){
@@ -152,10 +152,9 @@ async function playMarinaGreeting(){
   try {
     if (!(await parentLogin())) return;
     state("thinking", "Фокси готовится поздороваться");
-    const result = marinaGreeting || await request({action:"greeting",csrf});
+    const result = marinaGreeting || await request({action:"greeting",csrf,greeting});
     if (result.audio_mp3) marinaGreeting = result;
-    greeting = result.reply;
-    speak(greeting, result.audio_mp3, false);
+    speak(result.reply, result.audio_mp3, false);
   } catch (error) {
     state("idle",error.message,true);
   } finally {
