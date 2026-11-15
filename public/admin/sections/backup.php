@@ -44,4 +44,4 @@ if (!is_file($sqlitePath)) {
     echo '<p class="orda-notice error">' . foxyEsc($integrity) . '</p>';
 }
 echo '<p>Восстановление на сервер — вручную после проверки архива; автоматическое восстановление из админки отключено.</p></section>';
-echo '</div><script defer src="admin.js?v=2"></script>';
+echo '</div><script defer src="admin.js?v=3"></script>';
