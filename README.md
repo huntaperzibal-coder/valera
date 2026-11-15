@@ -5,7 +5,7 @@
 
 ## Развёртывание
 На Beget каталог сайта — `/home/a/altaikemp/hunta.su/public_html`.
-Запустите `bash tools/valera-sync.sh /home/a/altaikemp/hunta.su/public_html` с доступом на запись в каталог сайта и в каталог `hunta.su/valera-repo` рядом с ним.
+Установите `tools/valera-sync.sh` как исполняемый `~/valera-sync.sh` в SSH-аккаунте `altaikemp_foxy`. Для обновления запустите `~/valera-sync.sh`. На Beget скрипт скачивает `main` с GitHub и проверяет PHP 8.2 перед копированием.
 Скрипт разворачивает отслеживаемые файлы из `public/`. Уже существующие файлы сайта сохраняются, если в репозитории нет файла с тем же путём.
 На Мастерхосте скрипт без аргументов использует `~/hunta.su/www`.
 
